@@ -8,7 +8,6 @@ import {
   afterEach
 } from "vitest";
 
-// Импортируем функции из исходного файла как обычный модуль
 import {
   createUser,
   createBook,
