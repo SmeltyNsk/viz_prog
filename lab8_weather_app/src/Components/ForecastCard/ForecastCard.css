@@ -1,0 +1,30 @@
+.forecast-card {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  
+  .forecast-card__day {
+    margin: 0 0 4px;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+  
+  .forecast-card__desc {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.85);
+    text-transform: capitalize;
+  }
+  
+  .forecast-card__icon {
+    width: 54px;
+    height: 54px;
+  }
+  
+  .forecast-card__temp {
+    font-size: 22px;
+  }

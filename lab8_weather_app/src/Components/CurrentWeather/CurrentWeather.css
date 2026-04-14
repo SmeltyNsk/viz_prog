@@ -1,0 +1,54 @@
+.card {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 24px;
+    padding: 24px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  }
+  
+  .current-weather {
+    min-height: 100%;
+  }
+  
+  .current-weather__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  
+  .current-weather__date {
+    margin: 0 0 10px;
+    color: rgba(255, 255, 255, 0.85);
+  }
+  
+  .current-weather__city {
+    margin: 0;
+    font-size: 36px;
+  }
+  
+  .current-weather__icon {
+    width: 110px;
+    height: 110px;
+  }
+  
+  .current-weather__main {
+    margin-top: 12px;
+  }
+
+  .current-weather__temp {
+    margin: 0;
+    font-size: 72px;
+    font-weight: 800;
+  }
+  
+  .current-weather__description {
+    margin: 8px 0;
+    font-size: 20px;
+    text-transform: capitalize;
+  }
+  
+  .current-weather__feels-like {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.92);
+  }

@@ -1,0 +1,41 @@
+.air-pollution__title {
+    margin: 0 0 16px;
+    font-size: 24px;
+  }
+  
+  .air-pollution__summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  
+  .air-pollution__aqi-value {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  
+  .air-pollution__aqi-label {
+    color: rgba(255, 255, 255, 0.88);
+  }
+  
+  .air-pollution__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  
+  .air-pollution__item {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    padding: 14px;
+  }
+  
+  .air-pollution__item span {
+    display: block;
+    margin-bottom: 8px;
+    color: rgba(255, 255, 255, 0.8);
+  }

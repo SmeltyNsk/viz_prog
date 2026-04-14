@@ -1,0 +1,58 @@
+.app {
+    min-height: 100vh;
+    transition: background 0.4s ease;
+  }
+  
+  .overlay {
+    min-height: 100vh;
+    background: rgba(0, 0, 0, 0.18);
+    padding: 24px;
+  }
+  
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  
+  .app-title {
+    margin: 0 0 8px;
+    font-size: 36px;
+    font-weight: 700;
+  }
+  
+  .app-subtitle {
+    margin: 0 0 24px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .updated-time {
+    margin: 12px 0 20px;
+    color: rgba(255, 255, 255, 0.85);
+  }
+  
+  .content-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+  
+  .content-grid > :nth-child(2),
+  .content-grid > :nth-child(3) {
+    align-self: start;
+  }
+  
+  .theme-clear {
+    background: linear-gradient(180deg, #4f7df3 0%, #6fa4ff 100%);
+  }
+  
+  .theme-clouds {
+    background: linear-gradient(180deg, #708090 0%, #aeb8c2 100%);
+  }
+  
+  .theme-rain {
+    background: linear-gradient(180deg, #3a6073 0%, #16222a 100%);
+  }
+  
+  .theme-storm {
+    background: linear-gradient(180deg, #1f1c2c 0%, #928dab 100%);
+  }

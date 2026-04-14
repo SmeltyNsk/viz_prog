@@ -9,10 +9,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev:lab7": "vite --config lab7-demo/vite.config.ts",
     "build:lab7": "vite build --config lab7-demo/vite.config.ts",
-    "preview:lab7": "vite preview --config lab7-demo/vite.config.ts"
+    "preview:lab7": "vite preview --config lab7-demo/vite.config.ts",
+    "dev:lab8_weather_app": "vite --config lab8_weather_app/vite.config.ts",
+    "build:lab8_weather_app": "vite build --config lab8_weather_app/vite.config.ts",
+    "preview:lab8_weather_app": "vite preview --config lab8_weather_app/vite.config.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@vitejs/plugin-react": "^5.2.0",
     "typescript": "^5.8.2",
     "vite": "^6.4.1",
     "vitest": "^3.2.4"
