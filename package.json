@@ -4,28 +4,42 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+
     "dev:lab7": "vite --config lab7-demo/vite.config.ts",
     "build:lab7": "vite build --config lab7-demo/vite.config.ts",
     "preview:lab7": "vite preview --config lab7-demo/vite.config.ts",
+
     "dev:lab8_weather_app": "vite --config lab8_weather_app/vite.config.ts",
     "build:lab8_weather_app": "vite build --config lab8_weather_app/vite.config.ts",
     "preview:lab8_weather_app": "vite preview --config lab8_weather_app/vite.config.ts"
   },
-  "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@vitejs/plugin-react": "^5.2.0",
-    "typescript": "^5.8.2",
-    "vite": "^6.4.1",
-    "vitest": "^3.2.4"
-  },
   "dependencies": {
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
     "axios": "^1.14.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "eslint": "^10.3.0",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.3",
+    "typescript": "^5.8.2",
+    "vite": "^6.4.1",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.4"
   }
 }
