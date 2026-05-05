@@ -37,11 +37,30 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
   const gridRef = useRef<HTMLDivElement>(null);
 
-  const handleCellClick = useCallback((rowIndex: number, columnIndex: number) => {
-    setActiveCell([rowIndex, columnIndex]);
-    setEditingCell(null);
-    gridRef.current?.focus();
-  }, []);
+  const [selectedRange, setSelectedRange] = useState<{
+    start: [number, number];
+    end: [number, number];
+  } | null>(null);
+
+  const handleCellClick = useCallback(
+    (row: number, col: number, shiftKey = false) => {
+      if (shiftKey && activeCell) {
+        setSelectedRange({
+          start: activeCell,
+          end: [row, col],
+        });
+  
+        gridRef.current?.focus();
+        return;
+      }
+  
+      setActiveCell([row, col]);
+      setEditingCell(null);
+      setSelectedRange(null);
+      gridRef.current?.focus();
+    },
+    [activeCell],
+  );
 
   const handleStartEditing = useCallback(
     (rowIndex: number, columnIndex: number) => {
@@ -50,7 +69,7 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
     },
     [],
   );
-
+  
   const handleCellChange = useCallback(
     (rowIndex: number, columnIndex: number, newValue: string) => {
       setData((prevData) => {
@@ -130,9 +149,11 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
           return;
   
         case 'Escape':
-          event.preventDefault();
-          setEditingCell(null);
-          return;
+            event.preventDefault();
+            setEditingCell(null);
+            setSelectedRange(null);
+            setActiveCell(null);
+            return;
   
         default:
           return;
@@ -169,6 +190,28 @@ const handleFormulaBarChange = (newValue: string) => {
   const [rowIndex, columnIndex] = activeCell;
   handleCellChange(rowIndex, columnIndex, newValue);
 };
+
+const isCellInSelectedRange = (
+    rowIndex: number,
+    columnIndex: number,
+  ): boolean => {
+    if (!selectedRange) {
+      return false;
+    }
+  
+    const startRow = Math.min(selectedRange.start[0], selectedRange.end[0]);
+    const endRow = Math.max(selectedRange.start[0], selectedRange.end[0]);
+    const startColumn = Math.min(selectedRange.start[1], selectedRange.end[1]);
+    const endColumn = Math.max(selectedRange.start[1], selectedRange.end[1]);
+  
+    return (
+      rowIndex >= startRow &&
+      rowIndex <= endRow &&
+      columnIndex >= startColumn &&
+      columnIndex <= endColumn
+    );
+  };
+
   return (
     <div style={{ display: 'inline-block' }}>
     <FormulaBar
@@ -220,6 +263,7 @@ const handleFormulaBarChange = (newValue: string) => {
           </div>
 
           {row.map((cell, columnIndex) => {
+            const isSelected = isCellInSelectedRange(rowIndex, columnIndex);
             const isActive =
               activeCell !== null &&
               activeCell[0] === rowIndex &&
@@ -231,15 +275,16 @@ const handleFormulaBarChange = (newValue: string) => {
               editingCell[1] === columnIndex;
               
             return (
-              <Cell
+                <Cell
                 key={cell.address}
                 value={String(cell.computedValue ?? '')}
-                formula={
-                  cell.rawValue.startsWith('=') ? cell.rawValue : undefined
-                }
+                formula={cell.rawValue.startsWith('=') ? cell.rawValue : undefined}
                 isActive={isActive}
+                isSelected={isSelected}
                 isEditing={isEditing}
-                onClick={() => handleCellClick(rowIndex, columnIndex)}
+                onClick={(event) =>
+                  handleCellClick(rowIndex, columnIndex, event.shiftKey)
+                }
                 onDoubleClick={() => handleStartEditing(rowIndex, columnIndex)}
                 onStopEditing={(newValue) =>
                   handleCellChange(rowIndex, columnIndex, newValue)

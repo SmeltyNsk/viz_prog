@@ -1,12 +1,13 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import type { CSSProperties, KeyboardEvent } from 'react';
+import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
 
 interface CellProps {
   value: string;
   formula?: string;
   isActive: boolean;
+  isSelected: boolean;
   isEditing: boolean;
-  onClick: () => void;
+  onClick: (event: MouseEvent<HTMLDivElement>) => void;
   onDoubleClick: () => void;
   onStartEditing?: () => void;
   onStopEditing: (newValue: string) => void;
@@ -18,6 +19,7 @@ const Cell = ({
   formula,
   isActive,
   isEditing,
+  isSelected,
   onClick,
   onDoubleClick,
   onStopEditing,
@@ -106,7 +108,7 @@ const Cell = ({
         textOverflow: 'ellipsis',
         padding: '0 4px',
         lineHeight: '24px',
-        backgroundColor: isActive ? '#e8f0fe' : 'white',
+        backgroundColor: isActive ? '#e8f0fe' : isSelected ? '#f1f7ff' : 'white',
         cursor: 'cell',
       }}
     >
