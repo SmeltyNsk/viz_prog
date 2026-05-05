@@ -5,8 +5,11 @@ interface CellProps {
   value: string;
   formula?: string;
   isActive: boolean;
+  isEditing: boolean;
   onClick: () => void;
-  onChange: (newValue: string) => void;
+  onDoubleClick: () => void;
+  onStartEditing?: () => void;
+  onStopEditing: (newValue: string) => void;
   style?: CSSProperties;
 }
 
@@ -14,58 +17,50 @@ const Cell = ({
   value,
   formula,
   isActive,
+  isEditing,
   onClick,
-  onChange,
+  onDoubleClick,
+  onStopEditing,
   style,
 }: CellProps) => {
-  const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const initialEditValue = formula ?? value;
-
-  const [editValue, setEditValue] = useState(initialEditValue);
+  const [editValue, setEditValue] = useState(formula ?? value);
 
   useEffect(() => {
-    if (editing) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
     }
-  }, [editing]);
+  }, [isEditing]);
 
   useEffect(() => {
-    if (!editing) {
+    if (!isEditing) {
       setEditValue(formula ?? value);
     }
-  }, [value, formula, editing]);
+  }, [value, formula, isEditing]);
 
-  const saveValue = () => {
-    const currentValue = formula ?? value;
-
-    if (editValue !== currentValue) {
-      onChange(editValue);
+  const handleSave = () => {
+    if (editValue !== (formula ?? value)) {
+      onStopEditing(editValue);
+    } else {
+      onStopEditing(editValue);
     }
-
-    setEditing(false);
   };
 
-  const cancelEditing = () => {
+  const handleCancel = () => {
     setEditValue(formula ?? value);
-    setEditing(false);
-  };
-
-  const handleDoubleClick = () => {
-    onClick();
-    setEditing(true);
+    onStopEditing(value);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      saveValue();
-    }
-
-    if (event.key === 'Escape') {
+      event.stopPropagation();
+      handleSave();
+    } else if (event.key === 'Escape') {
       event.preventDefault();
-      cancelEditing();
+      event.stopPropagation();
+      handleCancel();
     }
   };
 
@@ -77,7 +72,7 @@ const Cell = ({
     ...style,
   };
 
-  if (editing) {
+  if (isEditing) {
     return (
       <div style={commonStyle}>
         <input
@@ -85,7 +80,7 @@ const Cell = ({
           type="text"
           value={editValue}
           onChange={(event) => setEditValue(event.target.value)}
-          onBlur={saveValue}
+          onBlur={handleSave}
           onKeyDown={handleKeyDown}
           style={{
             width: '100%',
@@ -103,7 +98,7 @@ const Cell = ({
   return (
     <div
       onClick={onClick}
-      onDoubleClick={handleDoubleClick}
+      onDoubleClick={onDoubleClick}
       style={{
         ...commonStyle,
         overflow: 'hidden',

@@ -14,13 +14,23 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
   );
 
   const [activeCell, setActiveCell] = useState<[number, number] | null>(null);
+  const [editingCell, setEditingCell] = useState<[number, number] | null>(null);
 
   const gridRef = useRef<HTMLDivElement>(null);
 
-  const handleCellClick = useCallback((row: number, col: number) => {
-    setActiveCell([row, col]);
+  const handleCellClick = useCallback((rowIndex: number, columnIndex: number) => {
+    setActiveCell([rowIndex, columnIndex]);
+    setEditingCell(null);
     gridRef.current?.focus();
   }, []);
+
+  const handleStartEditing = useCallback(
+    (rowIndex: number, columnIndex: number) => {
+      setActiveCell([rowIndex, columnIndex]);
+      setEditingCell([rowIndex, columnIndex]);
+    },
+    [],
+  );
 
   const handleCellChange = useCallback(
     (rowIndex: number, columnIndex: number, newValue: string) => {
@@ -43,6 +53,9 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
           }),
         ),
       );
+
+      setEditingCell(null);
+      gridRef.current?.focus();
     },
     [],
   );
@@ -57,6 +70,8 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
       ) {
         return;
       }
+
+      if (editingCell) return;
 
       const [rowIndex, columnIndex] = activeCell;
 
@@ -80,6 +95,16 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
           nextColumnIndex = Math.min(columns - 1, columnIndex + 1);
           break;
 
+        case 'Enter':
+          event.preventDefault();
+          handleStartEditing(rowIndex, columnIndex);
+          return;
+
+        case 'Escape':
+          event.preventDefault();
+          setEditingCell(null);
+          return;
+
         default:
           return;
       }
@@ -93,7 +118,81 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [activeCell, rows, columns]);
+  }, [activeCell, editingCell, rows, columns, handleStartEditing]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+  
+      if (target instanceof HTMLInputElement) {
+        return;
+      }
+  
+      if (!activeCell) return;
+  
+      if (
+        document.activeElement !== gridRef.current &&
+        !gridRef.current?.contains(document.activeElement)
+      ) {
+        return;
+      }
+  
+      if (editingCell) return;
+  
+      const [rowIndex, columnIndex] = activeCell;
+  
+      let nextRowIndex = rowIndex;
+      let nextColumnIndex = columnIndex;
+  
+      switch (event.key) {
+        case 'ArrowUp':
+          nextRowIndex = Math.max(0, rowIndex - 1);
+          break;
+  
+        case 'ArrowDown':
+          nextRowIndex = Math.min(rows - 1, rowIndex + 1);
+          break;
+  
+        case 'ArrowLeft':
+          nextColumnIndex = Math.max(0, columnIndex - 1);
+          break;
+  
+        case 'ArrowRight':
+          nextColumnIndex = Math.min(columns - 1, columnIndex + 1);
+          break;
+  
+        case 'Enter':
+          event.preventDefault();
+          handleStartEditing(rowIndex, columnIndex);
+          return;
+  
+        case 'Escape':
+          event.preventDefault();
+          setEditingCell(null);
+          return;
+  
+        default:
+          return;
+      }
+  
+      event.preventDefault();
+      setActiveCell([nextRowIndex, nextColumnIndex]);
+    };
+  
+    document.addEventListener('keydown', handleKeyDown);
+  
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeCell, editingCell, rows, columns, handleStartEditing]);
+
+  useEffect(() => {
+    if (!editingCell) {
+      requestAnimationFrame(() => {
+        gridRef.current?.focus();
+      });
+    }
+  }, [editingCell]);
 
   return (
     <div
@@ -144,6 +243,11 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
               activeCell[0] === rowIndex &&
               activeCell[1] === columnIndex;
 
+            const isEditing =
+              editingCell !== null &&
+              editingCell[0] === rowIndex &&
+              editingCell[1] === columnIndex;
+
             return (
               <Cell
                 key={cell.address}
@@ -152,8 +256,10 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
                   cell.rawValue.startsWith('=') ? cell.rawValue : undefined
                 }
                 isActive={isActive}
+                isEditing={isEditing}
                 onClick={() => handleCellClick(rowIndex, columnIndex)}
-                onChange={(newValue) =>
+                onDoubleClick={() => handleStartEditing(rowIndex, columnIndex)}
+                onStopEditing={(newValue) =>
                   handleCellChange(rowIndex, columnIndex, newValue)
                 }
               />
