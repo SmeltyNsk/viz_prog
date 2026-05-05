@@ -15,6 +15,22 @@ export function columnIndexToLetter(index: number): string {
     return letters;
 }
 
+export function getColumnName(columnIndex: number): string {
+    let name = '';
+    let index = columnIndex;
+  
+    while (index >= 0) {
+      name = String.fromCharCode((index % 26) + 65) + name;
+      index = Math.floor(index / 26) - 1;
+    }
+  
+    return name;
+  }
+  
+  export function getCellAddress(rowIndex: number, columnIndex: number): string {
+    return `${getColumnName(columnIndex)}${rowIndex + 1}`;
+  }
+  
 export function parseCellAddress(address: string): [number, number] {
     const match = address.match(/^([A-Z]+)(\d+)$/);
     if (!match) {

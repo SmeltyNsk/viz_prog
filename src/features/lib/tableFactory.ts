@@ -1,27 +1,32 @@
-export interface CellData {
-    value: string;
-    formula: string;
+import type { CellData } from '@features/spreadsheet/spreadsheetType';
+import { getCellAddress } from './cellAddress';
+
+interface TableConfig {
+  rows: number;
+  columns: number;
 }
 
-export interface tableConfig {
-    rows: number;
-    columns: number;
-    defaultCell: Partial<CellData>;
-}
+export function createTable(config: TableConfig): CellData[][] {
+  const { rows, columns } = config;
+  const table: CellData[][] = [];
 
-export function createTable(config: tableConfig): CellData[][] {
-    const { rows, columns, defaultCell } = config;
-    const table: CellData[][] = [];
+  for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+    const rowCells: CellData[] = [];
 
-    for (let row = 0; row < rows; row++) { // цикл который создает строки   
-        const row: CellData[] = [];
-        for (let col = 0; col < columns; col++) { // цикл который создает столбцы
-            row.push({
-                value: defaultCell.value || '',
-                formula: defaultCell.formula || '',
-            });
-        }
-        table.push(row); // добавляем строку
+    for (let columnIndex = 0; columnIndex < columns; columnIndex += 1) {
+      const address = getCellAddress(rowIndex, columnIndex);
+
+      rowCells.push({
+        id: address,
+        address,
+        rawValue: '',
+        computedValue: '',
+        type: 'string',
+      });
     }
-    return table;
+
+    table.push(rowCells);
+  }
+
+  return table;
 }

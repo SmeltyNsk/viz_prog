@@ -1,17 +1,19 @@
-export type CellType = 'text' | 'number' | 'formula' | 'boolean' | 'NULL';
+export type CellValue = string | number | boolean | null;
+
+export type CellType = 'string' | 'number' | 'boolean' | 'formula';
 
 export interface CellData {
-    id: string;
-    address: string;
-    rawValue: string;
-    computedValue: string;
-    type: CellType;
+  id: string;
+  address: string;
+  rawValue: string;
+  computedValue: CellValue;
+  type: CellType;
 }
 
 export interface SpreadsheetData {
-    rows: number;
-    columns: number;
-    cells: Record<string, CellData>;
+  rows: number;
+  columns: number;
+  cells: CellData[][];
 }
 
 export interface CellPosition {
