@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Cell from '@features/ui/cell';
 import { createTable } from '@features/lib/tableFactory';
 import type { CellData } from '@features/spreadsheet/spreadsheetType';
+import FormulaBar from '@features/ui/formulaBar';
 
 interface SpreadsheetGridProps {
   rows?: number;
@@ -194,7 +195,27 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
     }
   }, [editingCell]);
 
+  const activeCellData =
+  activeCell === null ? null : data[activeCell[0]]?.[activeCell[1]] ?? null;
+
+const activeCellAddress = activeCellData?.address ?? null;
+const activeCellValue = activeCellData?.rawValue ?? '';
+
+const handleFormulaBarChange = (newValue: string) => {
+  if (!activeCell) return;
+
+  const [rowIndex, columnIndex] = activeCell;
+  handleCellChange(rowIndex, columnIndex, newValue);
+};
+
   return (
+    <div style={{ display: 'inline-block' }}>
+    <FormulaBar
+      activeCellAddress={activeCellAddress}
+      activeCellValue={activeCellValue}
+      onChange={handleFormulaBarChange}
+    />
+
     <div
       ref={gridRef}
       tabIndex={0}
@@ -247,7 +268,7 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
               editingCell !== null &&
               editingCell[0] === rowIndex &&
               editingCell[1] === columnIndex;
-
+              
             return (
               <Cell
                 key={cell.address}
@@ -267,6 +288,7 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
           })}
         </div>
       ))}
+    </div>
     </div>
   );
 };
