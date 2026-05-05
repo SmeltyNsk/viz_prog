@@ -1,14 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { MouseEvent } from 'react';
+
 import Cell from '@features/ui/cell';
 import FormulaBar from '@features/ui/formulaBar';
+import Toolbar from '@features/ui/toolbar';
+
 import { createTable } from '@features/lib/tableFactory';
 import { formatCellAddress } from '@features/lib/cellAddress';
 import { evaluateFormula, getNumericCellValue } from '@features/lib/utils';
+
 import type { CellData } from '@features/spreadsheet/spreadsheetType';
 
 interface SpreadsheetGridProps {
   rows?: number;
   columns?: number;
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  cell: [number, number];
 }
 
 function createEmptyCell(rowIndex: number, columnIndex: number): CellData {
@@ -21,6 +32,20 @@ function createEmptyCell(rowIndex: number, columnIndex: number): CellData {
     computedValue: '',
     type: 'string',
   };
+}
+
+function normalizeTableAddresses(data: CellData[][]): CellData[][] {
+  return data.map((row, rowIndex) =>
+    row.map((cell, columnIndex) => {
+      const address = formatCellAddress(rowIndex, columnIndex);
+
+      return {
+        ...cell,
+        id: address,
+        address,
+      };
+    }),
+  );
 }
 
 function recalculateTable(data: CellData[][]): CellData[][] {
@@ -55,6 +80,7 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
   const [activeCell, setActiveCell] = useState<[number, number] | null>(null);
   const [editingCell, setEditingCell] = useState<[number, number] | null>(null);
+  const [toolbar, setToolbar] = useState<ContextMenuState | null>(null);
 
   const [selectedRange, setSelectedRange] = useState<{
     start: [number, number];
@@ -66,8 +92,16 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
   const rowCount = data.length;
   const columnCount = data[0]?.length ?? 0;
 
+  const clearSelection = useCallback(() => {
+    setActiveCell(null);
+    setEditingCell(null);
+    setSelectedRange(null);
+  }, []);
+
   const handleCellClick = useCallback(
     (rowIndex: number, columnIndex: number, shiftKey = false) => {
+      setToolbar(null);
+
       if (shiftKey && activeCell) {
         setSelectedRange({
           start: activeCell,
@@ -86,8 +120,30 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
     [activeCell],
   );
 
+  const handleCellContextMenu = useCallback(
+    (
+      event: MouseEvent<HTMLDivElement>,
+      rowIndex: number,
+      columnIndex: number,
+    ) => {
+      event.preventDefault();
+
+      setActiveCell([rowIndex, columnIndex]);
+      setEditingCell(null);
+      setSelectedRange(null);
+
+      setToolbar({
+        x: event.clientX,
+        y: event.clientY,
+        cell: [rowIndex, columnIndex],
+      });
+    },
+    [],
+  );
+
   const handleStartEditing = useCallback(
     (rowIndex: number, columnIndex: number) => {
+      setToolbar(null);
       setActiveCell([rowIndex, columnIndex]);
       setEditingCell([rowIndex, columnIndex]);
     },
@@ -128,76 +184,168 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
     [],
   );
 
-  const addRow = useCallback(() => {
-    setData((prevData) => {
-      const nextRowIndex = prevData.length;
-      const currentColumnCount = prevData[0]?.length ?? columns;
+  const addRowAfter = useCallback(
+    (rowIndex: number) => {
+      setData((prevData) => {
+        const columnLength = prevData[0]?.length ?? columns;
+        const insertIndex = Math.min(rowIndex + 1, prevData.length);
 
-      const newRow = Array.from({ length: currentColumnCount }, (_, columnIndex) =>
-        createEmptyCell(nextRowIndex, columnIndex),
-      );
+        const newRow = Array.from({ length: columnLength }, (_, columnIndex) =>
+          createEmptyCell(insertIndex, columnIndex),
+        );
 
-      return recalculateTable([...prevData, newRow]);
-    });
+        const updatedData = [
+          ...prevData.slice(0, insertIndex),
+          newRow,
+          ...prevData.slice(insertIndex),
+        ];
 
-    setRowHeights((prev) => [...prev, 24]);
-  }, [columns]);
-
-  const deleteRow = useCallback(() => {
-    if (rowCount <= 1) {
-      return;
-    }
-
-    setData((prevData) => recalculateTable(prevData.slice(0, -1)));
-    setRowHeights((prev) => prev.slice(0, -1));
-
-    if (activeCell && activeCell[0] >= rowCount - 1) {
-      setActiveCell(null);
-    }
-
-    if (editingCell && editingCell[0] >= rowCount - 1) {
-      setEditingCell(null);
-    }
-
-    setSelectedRange(null);
-  }, [rowCount, activeCell, editingCell]);
-
-  const addColumn = useCallback(() => {
-    setData((prevData) => {
-      const updatedData = prevData.map((row, rowIndex) => {
-        const nextColumnIndex = row.length;
-        const newCell = createEmptyCell(rowIndex, nextColumnIndex);
-
-        return [...row, newCell];
+        return recalculateTable(normalizeTableAddresses(updatedData));
       });
 
-      return recalculateTable(updatedData);
-    });
+      setRowHeights((prev) => {
+        const insertIndex = Math.min(rowIndex + 1, prev.length);
 
-    setColumnWidths((prev) => [...prev, 80]);
-  }, []);
+        return [...prev.slice(0, insertIndex), 24, ...prev.slice(insertIndex)];
+      });
+
+      clearSelection();
+    },
+    [columns, clearSelection],
+  );
+
+  const deleteRowAt = useCallback(
+    (rowIndex: number) => {
+      setData((prevData) => {
+        if (prevData.length <= 1) {
+          return prevData;
+        }
+
+        const updatedData = prevData.filter((_, index) => index !== rowIndex);
+
+        return recalculateTable(normalizeTableAddresses(updatedData));
+      });
+
+      setRowHeights((prev) => {
+        if (prev.length <= 1) {
+          return prev;
+        }
+
+        return prev.filter((_, index) => index !== rowIndex);
+      });
+
+      clearSelection();
+    },
+    [clearSelection],
+  );
+
+  const addColumnAfter = useCallback(
+    (columnIndex: number) => {
+      setData((prevData) => {
+        const insertIndex = Math.min(columnIndex + 1, columnCount);
+
+        const updatedData = prevData.map((row, rowIndex) => {
+          const newCell = createEmptyCell(rowIndex, insertIndex);
+
+          return [
+            ...row.slice(0, insertIndex),
+            newCell,
+            ...row.slice(insertIndex),
+          ];
+        });
+
+        return recalculateTable(normalizeTableAddresses(updatedData));
+      });
+
+      setColumnWidths((prev) => {
+        const insertIndex = Math.min(columnIndex + 1, prev.length);
+
+        return [...prev.slice(0, insertIndex), 80, ...prev.slice(insertIndex)];
+      });
+
+      clearSelection();
+    },
+    [columnCount, clearSelection],
+  );
+
+  const deleteColumnAt = useCallback(
+    (columnIndex: number) => {
+      setData((prevData) => {
+        const currentColumnCount = prevData[0]?.length ?? 0;
+
+        if (currentColumnCount <= 1) {
+          return prevData;
+        }
+
+        const updatedData = prevData.map((row) =>
+          row.filter((_, index) => index !== columnIndex),
+        );
+
+        return recalculateTable(normalizeTableAddresses(updatedData));
+      });
+
+      setColumnWidths((prev) => {
+        if (prev.length <= 1) {
+          return prev;
+        }
+
+        return prev.filter((_, index) => index !== columnIndex);
+      });
+
+      clearSelection();
+    },
+    [clearSelection],
+  );
+
+  const addRow = useCallback(() => {
+    addRowAfter(rowCount - 1);
+  }, [addRowAfter, rowCount]);
+
+  const deleteRow = useCallback(() => {
+    deleteRowAt(rowCount - 1);
+  }, [deleteRowAt, rowCount]);
+
+  const addColumn = useCallback(() => {
+    addColumnAfter(columnCount - 1);
+  }, [addColumnAfter, columnCount]);
 
   const deleteColumn = useCallback(() => {
-    if (columnCount <= 1) {
-      return;
-    }
+    deleteColumnAt(columnCount - 1);
+  }, [deleteColumnAt, columnCount]);
 
-    setData((prevData) =>
-      recalculateTable(prevData.map((row) => row.slice(0, -1))),
-    );
+  const handleToolbarAction = useCallback(
+    (action: string) => {
+      if (!toolbar) {
+        return;
+      }
 
-    setColumnWidths((prev) => prev.slice(0, -1));
+      const [rowIndex, columnIndex] = toolbar.cell;
 
-    if (activeCell && activeCell[1] >= columnCount - 1) {
-      setActiveCell(null);
-    }
+      switch (action) {
+        case 'add-row':
+          addRowAfter(rowIndex);
+          break;
 
-    if (editingCell && editingCell[1] >= columnCount - 1) {
-      setEditingCell(null);
-    }
+        case 'delete-row':
+          deleteRowAt(rowIndex);
+          break;
 
-    setSelectedRange(null);
-  }, [columnCount, activeCell, editingCell]);
+        case 'add-column':
+          addColumnAfter(columnIndex);
+          break;
+
+        case 'delete-column':
+          deleteColumnAt(columnIndex);
+          break;
+
+        default:
+          break;
+      }
+
+      setToolbar(null);
+    },
+    [toolbar, addRowAfter, deleteRowAt, addColumnAfter, deleteColumnAt],
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -216,6 +364,7 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
       if (event.key === 'Escape') {
         event.preventDefault();
+        setToolbar(null);
         setEditingCell(null);
         setSelectedRange(null);
         setActiveCell(null);
@@ -422,12 +571,30 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
                   onStopEditing={(newValue) =>
                     handleCellChange(rowIndex, columnIndex, newValue)
                   }
+                  onContextMenu={(event) =>
+                    handleCellContextMenu(event, rowIndex, columnIndex)
+                  }
                 />
               );
             })}
           </div>
         ))}
       </div>
+
+      {toolbar && (
+        <Toolbar
+          x={toolbar.x}
+          y={toolbar.y}
+          onClose={() => setToolbar(null)}
+          onAction={handleToolbarAction}
+          items={[
+            { label: 'Добавить строку ниже', action: 'add-row' },
+            { label: 'Удалить строку', action: 'delete-row' },
+            { label: 'Добавить столбец справа', action: 'add-column' },
+            { label: 'Удалить столбец', action: 'delete-column' },
+          ]}
+        />
+      )}
     </div>
   );
 };

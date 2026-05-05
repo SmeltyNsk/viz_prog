@@ -9,6 +9,7 @@ interface CellProps {
   isEditing: boolean;
   onClick: (event: MouseEvent<HTMLDivElement>) => void;
   onDoubleClick: () => void;
+  onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void;
   onStartEditing?: () => void;
   onStopEditing: (newValue: string) => void;
   style?: CSSProperties;
@@ -20,6 +21,7 @@ const Cell = ({
   isActive,
   isEditing,
   isSelected,
+  onContextMenu,
   onClick,
   onDoubleClick,
   onStopEditing,
@@ -101,6 +103,7 @@ const Cell = ({
     <div
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
       style={{
         ...commonStyle,
         overflow: 'hidden',
@@ -115,6 +118,6 @@ const Cell = ({
       {value}
     </div>
   );
-};
+}
 
 export default memo(Cell);

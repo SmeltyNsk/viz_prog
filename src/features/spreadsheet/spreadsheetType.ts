@@ -1,6 +1,6 @@
 export type CellValue = string | number | boolean | null;
 
-export type CellType = 'string' | 'number' | 'boolean' | 'formula';
+export type CellType = 'string' | 'number' | 'formula' | 'boolean' | 'date' | 'empty';
 
 export interface CellData {
   id: string;
