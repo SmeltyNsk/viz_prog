@@ -3,11 +3,29 @@ import Cell from '@features/ui/cell';
 import { createTable } from '@features/lib/tableFactory';
 import type { CellData } from '@features/spreadsheet/spreadsheetType';
 import FormulaBar from '@features/ui/formulaBar';
+import { evaluateFormula, getNumericCellValue } from '@features/lib/utils';
 
 interface SpreadsheetGridProps {
   rows?: number;
   columns?: number;
 }
+
+function recalculateTable(data: CellData[][]): CellData[][] {
+    return data.map((row) =>
+      row.map((cell) => {
+        if (!cell.rawValue.startsWith('=')) {
+          return cell;
+        }
+  
+        return {
+          ...cell,
+          computedValue: evaluateFormula(cell.rawValue, (address) =>
+            getNumericCellValue(address, data),
+          ),
+        };
+      }),
+    );
+  }
 
 const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => {
   const [data, setData] = useState<CellData[][]>(() =>
@@ -35,91 +53,35 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
   const handleCellChange = useCallback(
     (rowIndex: number, columnIndex: number, newValue: string) => {
-      setData((prevData) =>
-        prevData.map((row, currentRowIndex) =>
+      setData((prevData) => {
+        const updatedData: CellData[][] = prevData.map((row, currentRowIndex) =>
           row.map((cell, currentColumnIndex) => {
             if (
               currentRowIndex === rowIndex &&
               currentColumnIndex === columnIndex
             ) {
+              const isFormula = newValue.startsWith('=');
+              const cellType: CellData['type'] = isFormula ? 'formula' : 'string';
+  
               return {
                 ...cell,
                 rawValue: newValue,
-                computedValue: newValue,
-                type: newValue.startsWith('=') ? 'formula' : 'string',
+                computedValue: isFormula ? '' : newValue,
+                type: cellType,
               };
             }
-
+  
             return cell;
           }),
-        ),
-      );
-
+        );
+  
+        return recalculateTable(updatedData);
+      });
+  
       setEditingCell(null);
-      gridRef.current?.focus();
     },
     [],
   );
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!activeCell) return;
-
-      if (
-        document.activeElement !== gridRef.current &&
-        !gridRef.current?.contains(document.activeElement)
-      ) {
-        return;
-      }
-
-      if (editingCell) return;
-
-      const [rowIndex, columnIndex] = activeCell;
-
-      let nextRowIndex = rowIndex;
-      let nextColumnIndex = columnIndex;
-
-      switch (event.key) {
-        case 'ArrowUp':
-          nextRowIndex = Math.max(0, rowIndex - 1);
-          break;
-
-        case 'ArrowDown':
-          nextRowIndex = Math.min(rows - 1, rowIndex + 1);
-          break;
-
-        case 'ArrowLeft':
-          nextColumnIndex = Math.max(0, columnIndex - 1);
-          break;
-
-        case 'ArrowRight':
-          nextColumnIndex = Math.min(columns - 1, columnIndex + 1);
-          break;
-
-        case 'Enter':
-          event.preventDefault();
-          handleStartEditing(rowIndex, columnIndex);
-          return;
-
-        case 'Escape':
-          event.preventDefault();
-          setEditingCell(null);
-          return;
-
-        default:
-          return;
-      }
-
-      event.preventDefault();
-      setActiveCell([nextRowIndex, nextColumnIndex]);
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [activeCell, editingCell, rows, columns, handleStartEditing]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -207,7 +169,6 @@ const handleFormulaBarChange = (newValue: string) => {
   const [rowIndex, columnIndex] = activeCell;
   handleCellChange(rowIndex, columnIndex, newValue);
 };
-
   return (
     <div style={{ display: 'inline-block' }}>
     <FormulaBar
