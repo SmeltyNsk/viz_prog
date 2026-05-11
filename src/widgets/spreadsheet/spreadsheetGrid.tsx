@@ -8,13 +8,20 @@ import Toolbar from '@features/ui/toolbar';
 
 import { createTable } from '@features/lib/tableFactory';
 import { formatCellAddress } from '@features/lib/cellAddress';
-import { detectCellType, evaluateFormula, getNumericCellValue, normalizeCellValue, } from '@features/lib/utils';
+import {
+  detectCellType,
+  evaluateFormula,
+  getNumericCellValue,
+  normalizeCellValue,
+} from '@features/lib/utils';
 
 import type { CellData } from '@features/spreadsheet/spreadsheetType';
 
 interface SpreadsheetGridProps {
   rows?: number;
   columns?: number;
+  initialData?: CellData[][];
+  onDataChange?: (data: CellData[][]) => void;
 }
 
 interface ContextMenuState {
@@ -85,17 +92,25 @@ function getColumnTitle(columnIndex: number): string {
   return result;
 }
 
-const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => {
+const SpreadsheetGrid = ({
+  rows = 100,
+  columns = 26,
+  initialData,
+  onDataChange,
+}: SpreadsheetGridProps) => {
+  const initialRowCount = initialData?.length ?? rows;
+  const initialColumnCount = initialData?.[0]?.length ?? columns;
+
   const [data, setData] = useState<CellData[][]>(() =>
-    createTable({ rows, columns }),
+    initialData ?? createTable({ rows, columns }),
   );
 
   const [columnWidths, setColumnWidths] = useState<number[]>(() =>
-    Array.from({ length: columns }, () => 80),
+    Array.from({ length: initialColumnCount }, () => 80),
   );
 
   const [rowHeights, setRowHeights] = useState<number[]>(() =>
-    Array.from({ length: rows }, () => 24),
+    Array.from({ length: initialRowCount }, () => 24),
   );
 
   const [activeCell, setActiveCell] = useState<[number, number] | null>(null);
@@ -112,6 +127,18 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
   const rowCount = data.length;
   const columnCount = data[0]?.length ?? 0;
+
+  const updateData = useCallback(
+    (updater: (prevData: CellData[][]) => CellData[][]) => {
+      setData((prevData) => {
+        const nextData = updater(prevData);
+        onDataChange?.(nextData);
+
+        return nextData;
+      });
+    },
+    [onDataChange],
+  );
 
   const totalTableWidth = useMemo(
     () => 40 + columnWidths.reduce((sum, width) => sum + width, 0),
@@ -187,7 +214,7 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
   const handleCellChange = useCallback(
     (rowIndex: number, columnIndex: number, newValue: string) => {
-      setData((prevData) => {
+      updateData((prevData) => {
         const updatedData: CellData[][] = prevData.map((row, currentRowIndex) =>
           row.map((cell, currentColumnIndex) => {
             if (
@@ -214,12 +241,12 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
       setEditingCell(null);
     },
-    [],
+    [updateData],
   );
 
   const addRowAfter = useCallback(
     (rowIndex: number) => {
-      setData((prevData) => {
+      updateData((prevData) => {
         const columnLength = prevData[0]?.length ?? columns;
         const insertIndex = Math.min(rowIndex + 1, prevData.length);
 
@@ -238,17 +265,18 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
       setRowHeights((prev) => {
         const insertIndex = Math.min(rowIndex + 1, prev.length);
+
         return [...prev.slice(0, insertIndex), 24, ...prev.slice(insertIndex)];
       });
 
       clearSelection();
     },
-    [columns, clearSelection],
+    [columns, clearSelection, updateData],
   );
 
   const deleteRowAt = useCallback(
     (rowIndex: number) => {
-      setData((prevData) => {
+      updateData((prevData) => {
         if (prevData.length <= 1) {
           return prevData;
         }
@@ -268,12 +296,12 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
       clearSelection();
     },
-    [clearSelection],
+    [clearSelection, updateData],
   );
 
   const addColumnAfter = useCallback(
     (columnIndex: number) => {
-      setData((prevData) => {
+      updateData((prevData) => {
         const currentColumnCount = prevData[0]?.length ?? 0;
         const insertIndex = Math.min(columnIndex + 1, currentColumnCount);
 
@@ -292,17 +320,18 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
       setColumnWidths((prev) => {
         const insertIndex = Math.min(columnIndex + 1, prev.length);
+
         return [...prev.slice(0, insertIndex), 80, ...prev.slice(insertIndex)];
       });
 
       clearSelection();
     },
-    [clearSelection],
+    [clearSelection, updateData],
   );
 
   const deleteColumnAt = useCallback(
     (columnIndex: number) => {
-      setData((prevData) => {
+      updateData((prevData) => {
         const currentColumnCount = prevData[0]?.length ?? 0;
 
         if (currentColumnCount <= 1) {
@@ -326,7 +355,7 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
       clearSelection();
     },
-    [clearSelection],
+    [clearSelection, updateData],
   );
 
   const addRow = useCallback(() => {
