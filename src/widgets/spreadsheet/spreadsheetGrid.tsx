@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 import Cell from '@features/ui/cell';
 import FormulaBar from '@features/ui/formulaBar';
@@ -7,7 +8,7 @@ import Toolbar from '@features/ui/toolbar';
 
 import { createTable } from '@features/lib/tableFactory';
 import { formatCellAddress } from '@features/lib/cellAddress';
-import { evaluateFormula, getNumericCellValue } from '@features/lib/utils';
+import { detectCellType, evaluateFormula, getNumericCellValue, normalizeCellValue, } from '@features/lib/utils';
 
 import type { CellData } from '@features/spreadsheet/spreadsheetType';
 
@@ -112,6 +113,18 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
   const rowCount = data.length;
   const columnCount = data[0]?.length ?? 0;
 
+  const totalTableWidth = useMemo(
+    () => 40 + columnWidths.reduce((sum, width) => sum + width, 0),
+    [columnWidths],
+  );
+
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => gridRef.current,
+    estimateSize: (index) => rowHeights[index] ?? 24,
+    overscan: 10,
+  });
+
   const clearSelection = useCallback(() => {
     setActiveCell(null);
     setEditingCell(null);
@@ -181,15 +194,13 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
               currentRowIndex === rowIndex &&
               currentColumnIndex === columnIndex
             ) {
-              const isFormula = newValue.startsWith('=');
-              const cellType: CellData['type'] = isFormula
-                ? 'formula'
-                : 'string';
+              const cellType = detectCellType(newValue);
 
               return {
                 ...cell,
                 rawValue: newValue,
-                computedValue: isFormula ? '' : newValue,
+                computedValue:
+                  cellType === 'formula' ? '' : normalizeCellValue(newValue),
                 type: cellType,
               };
             }
@@ -538,6 +549,10 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
     }
   }, [editingCell]);
 
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [rowHeights, rowVirtualizer]);
+
   const activeCellData =
     activeCell === null ? null : data[activeCell[0]]?.[activeCell[1]] ?? null;
 
@@ -603,129 +618,179 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
       <div
         ref={gridRef}
         tabIndex={0}
-        style={{ display: 'inline-block', outline: 'none' }}
+        style={{
+          height: 520,
+          maxWidth: '100vw',
+          overflow: 'auto',
+          outline: 'none',
+          border: '1px solid #ddd',
+        }}
       >
-        <div style={{ display: 'flex' }}>
-          <div style={{ width: 40, height: 24 }} />
+        <div style={{ width: totalTableWidth }}>
+          <div
+            style={{
+              display: 'flex',
+              position: 'sticky',
+              top: 0,
+              zIndex: 5,
+              backgroundColor: 'white',
+            }}
+          >
+            <div style={{ width: 40, height: 24 }} />
 
-          {columnWidths.map((width, columnIndex) => (
-            <div
-              key={columnIndex}
-              style={{
-                width,
-                height: 24,
-                border: '1px solid #ccc',
-                textAlign: 'center',
-                fontWeight: 'bold',
-                backgroundColor: '#f0f0f0',
-                lineHeight: '24px',
-                position: 'relative',
-                userSelect: 'none',
-                boxSizing: 'border-box',
-              }}
-            >
-              {getColumnTitle(columnIndex)}
-
+            {columnWidths.map((width, columnIndex) => (
               <div
-                onMouseDown={(event) =>
-                  handleColumnResizeStart(event, columnIndex, width)
-                }
+                key={columnIndex}
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: -3,
-                  width: 6,
-                  height: '100%',
-                  cursor: 'col-resize',
-                  zIndex: 2,
+                  width,
+                  height: 24,
+                  border: '1px solid #ccc',
+                  textAlign: 'center',
+                  fontWeight: 'bold',
+                  backgroundColor: '#f0f0f0',
+                  lineHeight: '24px',
+                  position: 'relative',
+                  userSelect: 'none',
+                  boxSizing: 'border-box',
                 }}
-              />
-            </div>
-          ))}
-        </div>
+              >
+                {getColumnTitle(columnIndex)}
 
-        {data.map((row, rowIndex) => (
-          <div key={rowIndex} style={{ display: 'flex' }}>
-            <div
-              style={{
-                width: 40,
-                height: rowHeights[rowIndex] ?? 24,
-                border: '1px solid #ccc',
-                textAlign: 'center',
-                backgroundColor: '#f0f0f0',
-                lineHeight: `${rowHeights[rowIndex] ?? 24}px`,
-                fontWeight: 'bold',
-                position: 'relative',
-                userSelect: 'none',
-                boxSizing: 'border-box',
-              }}
-            >
-              {rowIndex + 1}
+                <div
+                  onMouseDown={(event) =>
+                    handleColumnResizeStart(event, columnIndex, width)
+                  }
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: -3,
+                    width: 6,
+                    height: '100%',
+                    cursor: 'col-resize',
+                    zIndex: 2,
+                  }}
+                />
+              </div>
+            ))}
+          </div>
 
-              <div
-                onMouseDown={(event) =>
-                  handleRowResizeStart(
-                    event,
-                    rowIndex,
-                    rowHeights[rowIndex] ?? 24,
-                  )
-                }
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  bottom: -3,
-                  width: '100%',
-                  height: 6,
-                  cursor: 'row-resize',
-                  zIndex: 2,
-                }}
-              />
-            </div>
+          <div
+            style={{
+              height: rowVirtualizer.getTotalSize(),
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const rowIndex = virtualRow.index;
+              const row = data[rowIndex];
 
-            {row.map((cell, columnIndex) => {
-              const isSelected = isCellInSelectedRange(rowIndex, columnIndex);
-
-              const isActive =
-                activeCell !== null &&
-                activeCell[0] === rowIndex &&
-                activeCell[1] === columnIndex;
-
-              const isEditing =
-                editingCell !== null &&
-                editingCell[0] === rowIndex &&
-                editingCell[1] === columnIndex;
+              if (!row) {
+                return null;
+              }
 
               return (
-                <Cell
-                  key={cell.address}
-                  value={String(cell.computedValue ?? '')}
-                  formula={
-                    cell.rawValue.startsWith('=') ? cell.rawValue : undefined
-                  }
-                  isActive={isActive}
-                  isSelected={isSelected}
-                  isEditing={isEditing}
+                <div
+                  key={rowIndex}
                   style={{
-                    width: columnWidths[columnIndex] ?? 80,
-                    height: rowHeights[rowIndex] ?? 24,
+                    display: 'flex',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    transform: `translateY(${virtualRow.start}px)`,
                   }}
-                  onClick={(event) =>
-                    handleCellClick(rowIndex, columnIndex, event.shiftKey)
-                  }
-                  onDoubleClick={() =>
-                    handleStartEditing(rowIndex, columnIndex)
-                  }
-                  onStopEditing={(newValue) =>
-                    handleCellChange(rowIndex, columnIndex, newValue)
-                  }
-                  onContextMenu={(event) =>
-                    handleCellToolbar(event, rowIndex, columnIndex)
-                  }
-                />
+                >
+                  <div
+                    style={{
+                      width: 40,
+                      height: rowHeights[rowIndex] ?? 24,
+                      border: '1px solid #ccc',
+                      textAlign: 'center',
+                      backgroundColor: '#f0f0f0',
+                      lineHeight: `${rowHeights[rowIndex] ?? 24}px`,
+                      fontWeight: 'bold',
+                      position: 'relative',
+                      userSelect: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {rowIndex + 1}
+
+                    <div
+                      onMouseDown={(event) =>
+                        handleRowResizeStart(
+                          event,
+                          rowIndex,
+                          rowHeights[rowIndex] ?? 24,
+                        )
+                      }
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        bottom: -3,
+                        width: '100%',
+                        height: 6,
+                        cursor: 'row-resize',
+                        zIndex: 2,
+                      }}
+                    />
+                  </div>
+
+                  {row.map((cell, columnIndex) => {
+                    const isSelected = isCellInSelectedRange(
+                      rowIndex,
+                      columnIndex,
+                    );
+
+                    const isActive =
+                      activeCell !== null &&
+                      activeCell[0] === rowIndex &&
+                      activeCell[1] === columnIndex;
+
+                    const isEditing =
+                      editingCell !== null &&
+                      editingCell[0] === rowIndex &&
+                      editingCell[1] === columnIndex;
+
+                    return (
+                      <Cell
+                        key={cell.address}
+                        value={String(cell.computedValue ?? '')}
+                        formula={
+                          cell.rawValue.startsWith('=')
+                            ? cell.rawValue
+                            : undefined
+                        }
+                        isActive={isActive}
+                        isSelected={isSelected}
+                        isEditing={isEditing}
+                        style={{
+                          width: columnWidths[columnIndex] ?? 80,
+                          height: rowHeights[rowIndex] ?? 24,
+                        }}
+                        onClick={(event) =>
+                          handleCellClick(
+                            rowIndex,
+                            columnIndex,
+                            event.shiftKey,
+                          )
+                        }
+                        onDoubleClick={() =>
+                          handleStartEditing(rowIndex, columnIndex)
+                        }
+                        onStopEditing={(newValue) =>
+                          handleCellChange(rowIndex, columnIndex, newValue)
+                        }
+                        onContextMenu={(event) =>
+                          handleCellToolbar(event, rowIndex, columnIndex)
+                        }
+                      />
+                    );
+                  })}
+                </div>
               );
             })}
           </div>
-        ))}
+        </div>
       </div>
 
       {toolbar && (

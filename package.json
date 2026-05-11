@@ -7,22 +7,20 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
-
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
-
     "dev:lab7": "vite --config lab7-demo/vite.config.ts",
     "build:lab7": "vite build --config lab7-demo/vite.config.ts",
     "preview:lab7": "vite preview --config lab7-demo/vite.config.ts",
-
     "dev:lab8_weather_app": "vite --config lab8_weather_app/vite.config.ts",
     "build:lab8_weather_app": "vite build --config lab8_weather_app/vite.config.ts",
     "preview:lab8_weather_app": "vite preview --config lab8_weather_app/vite.config.ts"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.24",
     "axios": "^1.14.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"

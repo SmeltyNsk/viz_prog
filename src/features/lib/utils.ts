@@ -130,3 +130,40 @@ export function getNumericCellValue(
 
   return Number.isNaN(numberValue) ? null : numberValue;
 }
+
+export function detectCellType(value: string): CellData['type'] {
+  const trimmedValue = value.trim();
+
+  if (trimmedValue.startsWith('=')) {
+    return 'formula';
+  }
+
+  if (trimmedValue.toLowerCase() === 'true') {
+    return 'boolean';
+  }
+
+  if (trimmedValue.toLowerCase() === 'false') {
+    return 'boolean';
+  }
+
+  if (trimmedValue !== '' && !Number.isNaN(Number(trimmedValue))) {
+    return 'number';
+  }
+
+  return 'string';
+}
+
+export function normalizeCellValue(value: string): CellData['computedValue'] {
+  const cellType = detectCellType(value);
+  const trimmedValue = value.trim();
+
+  if (cellType === 'number') {
+    return Number(trimmedValue);
+  }
+
+  if (cellType === 'boolean') {
+    return trimmedValue.toLowerCase() === 'true';
+  }
+
+  return value;
+}
