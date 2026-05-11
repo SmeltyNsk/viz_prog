@@ -1,11 +1,19 @@
-import SpreadsheetGrid from '@widgets/spreadsheet/spreadsheetGrid';
+import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+
+import LoginPage from '@pages/loginPage/loginPage';
+import DocumentsPage from '@pages/documentsPage/documentsPage';
+import SpreadsheetPage from '@pages/spreadsheetPage/spreadsheetPage';
 
 function App() {
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Табличный процессор</h1>
-      <SpreadsheetGrid rows={100} columns={26} />
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Navigate to="/documents" replace />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/documents" element={<DocumentsPage />} />
+        <Route path="/documents/:documentId" element={<SpreadsheetPage />} />
+      </Routes>
+    </Router>
   );
 }
 
