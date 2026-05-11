@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MouseEvent } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 
 import Cell from '@features/ui/cell';
 import FormulaBar from '@features/ui/formulaBar';
@@ -20,6 +20,13 @@ interface ContextMenuState {
   x: number;
   y: number;
   cell: [number, number];
+}
+
+interface ResizeState {
+  type: 'column' | 'row';
+  index: number;
+  startPosition: number;
+  startSize: number;
 }
 
 function createEmptyCell(rowIndex: number, columnIndex: number): CellData {
@@ -65,6 +72,18 @@ function recalculateTable(data: CellData[][]): CellData[][] {
   );
 }
 
+function getColumnTitle(columnIndex: number): string {
+  let result = '';
+  let index = columnIndex;
+
+  while (index >= 0) {
+    result = String.fromCharCode((index % 26) + 65) + result;
+    index = Math.floor(index / 26) - 1;
+  }
+
+  return result;
+}
+
 const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => {
   const [data, setData] = useState<CellData[][]>(() =>
     createTable({ rows, columns }),
@@ -88,6 +107,7 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
   } | null>(null);
 
   const gridRef = useRef<HTMLDivElement>(null);
+  const resizeRef = useRef<ResizeState | null>(null);
 
   const rowCount = data.length;
   const columnCount = data[0]?.length ?? 0;
@@ -120,9 +140,9 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
     [activeCell],
   );
 
-  const handleCellContextMenu = useCallback(
+  const handleCellToolbar = useCallback(
     (
-      event: MouseEvent<HTMLDivElement>,
+      event: ReactMouseEvent<HTMLDivElement>,
       rowIndex: number,
       columnIndex: number,
     ) => {
@@ -137,6 +157,8 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
         y: event.clientY,
         cell: [rowIndex, columnIndex],
       });
+
+      gridRef.current?.focus();
     },
     [],
   );
@@ -205,7 +227,6 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
       setRowHeights((prev) => {
         const insertIndex = Math.min(rowIndex + 1, prev.length);
-
         return [...prev.slice(0, insertIndex), 24, ...prev.slice(insertIndex)];
       });
 
@@ -242,7 +263,8 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
   const addColumnAfter = useCallback(
     (columnIndex: number) => {
       setData((prevData) => {
-        const insertIndex = Math.min(columnIndex + 1, columnCount);
+        const currentColumnCount = prevData[0]?.length ?? 0;
+        const insertIndex = Math.min(columnIndex + 1, currentColumnCount);
 
         const updatedData = prevData.map((row, rowIndex) => {
           const newCell = createEmptyCell(rowIndex, insertIndex);
@@ -259,13 +281,12 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
 
       setColumnWidths((prev) => {
         const insertIndex = Math.min(columnIndex + 1, prev.length);
-
         return [...prev.slice(0, insertIndex), 80, ...prev.slice(insertIndex)];
       });
 
       clearSelection();
     },
-    [columnCount, clearSelection],
+    [clearSelection],
   );
 
   const deleteColumnAt = useCallback(
@@ -347,6 +368,48 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
     [toolbar, addRowAfter, deleteRowAt, addColumnAfter, deleteColumnAt],
   );
 
+  const handleColumnResizeStart = useCallback(
+    (
+      event: ReactMouseEvent<HTMLDivElement>,
+      columnIndex: number,
+      startWidth: number,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      setToolbar(null);
+
+      resizeRef.current = {
+        type: 'column',
+        index: columnIndex,
+        startPosition: event.clientX,
+        startSize: startWidth,
+      };
+    },
+    [],
+  );
+
+  const handleRowResizeStart = useCallback(
+    (
+      event: ReactMouseEvent<HTMLDivElement>,
+      rowIndex: number,
+      startHeight: number,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      setToolbar(null);
+
+      resizeRef.current = {
+        type: 'row',
+        index: rowIndex,
+        startPosition: event.clientY,
+        startSize: startHeight,
+      };
+    },
+    [],
+  );
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
@@ -422,6 +485,50 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
     columnCount,
     handleStartEditing,
   ]);
+
+  useEffect(() => {
+    const handleMouseMove = (event: globalThis.MouseEvent) => {
+      const resize = resizeRef.current;
+
+      if (!resize) {
+        return;
+      }
+
+      if (resize.type === 'column') {
+        const diff = event.clientX - resize.startPosition;
+        const nextWidth = Math.max(40, resize.startSize + diff);
+
+        setColumnWidths((prev) =>
+          prev.map((width, index) =>
+            index === resize.index ? nextWidth : width,
+          ),
+        );
+
+        return;
+      }
+
+      const diff = event.clientY - resize.startPosition;
+      const nextHeight = Math.max(20, resize.startSize + diff);
+
+      setRowHeights((prev) =>
+        prev.map((height, index) =>
+          index === resize.index ? nextHeight : height,
+        ),
+      );
+    };
+
+    const handleMouseUp = () => {
+      resizeRef.current = null;
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   useEffect(() => {
     if (!editingCell) {
@@ -512,9 +619,27 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
                 fontWeight: 'bold',
                 backgroundColor: '#f0f0f0',
                 lineHeight: '24px',
+                position: 'relative',
+                userSelect: 'none',
+                boxSizing: 'border-box',
               }}
             >
-              {String.fromCharCode(65 + columnIndex)}
+              {getColumnTitle(columnIndex)}
+
+              <div
+                onMouseDown={(event) =>
+                  handleColumnResizeStart(event, columnIndex, width)
+                }
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: -3,
+                  width: 6,
+                  height: '100%',
+                  cursor: 'col-resize',
+                  zIndex: 2,
+                }}
+              />
             </div>
           ))}
         </div>
@@ -530,9 +655,31 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
                 backgroundColor: '#f0f0f0',
                 lineHeight: `${rowHeights[rowIndex] ?? 24}px`,
                 fontWeight: 'bold',
+                position: 'relative',
+                userSelect: 'none',
+                boxSizing: 'border-box',
               }}
             >
               {rowIndex + 1}
+
+              <div
+                onMouseDown={(event) =>
+                  handleRowResizeStart(
+                    event,
+                    rowIndex,
+                    rowHeights[rowIndex] ?? 24,
+                  )
+                }
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  bottom: -3,
+                  width: '100%',
+                  height: 6,
+                  cursor: 'row-resize',
+                  zIndex: 2,
+                }}
+              />
             </div>
 
             {row.map((cell, columnIndex) => {
@@ -572,7 +719,7 @@ const SpreadsheetGrid = ({ rows = 100, columns = 26 }: SpreadsheetGridProps) => 
                     handleCellChange(rowIndex, columnIndex, newValue)
                   }
                   onContextMenu={(event) =>
-                    handleCellContextMenu(event, rowIndex, columnIndex)
+                    handleCellToolbar(event, rowIndex, columnIndex)
                   }
                 />
               );
