@@ -1,11 +1,25 @@
-import { CellData } from "@features/spreadsheet/spreadsheetType";
+import type { CellData } from '@features/spreadsheet/spreadsheetType';
 
 export interface SpreadsheetDocument {
-    id: string;
-    name: string;
-    rows: number;
-    columns: number;
-    cells: Record<string, CellData>;
-    createdAt: string;
-    updatedAt: string;
+  id: string;
+  userId: string;
+  title: string;
+  rows: number;
+  columns: number;
+  cells: CellData[][];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDocumentPayload {
+  title: string;
+  rows: number;
+  columns: number;
+}
+
+export interface UpdateDocumentPayload {
+  title?: string;
+  cells?: CellData[][];
+  rows?: number;
+  columns?: number;
 }
