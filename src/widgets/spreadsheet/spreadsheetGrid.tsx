@@ -2,27 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { useAppDispatch, useAppSelector } from '@app/hooks';
+import { spreadsheetActions } from '@features/spreadsheet/spreadsheetSlice';
+
 import Cell from '@features/ui/cell';
 import FormulaBar from '@features/ui/formulaBar';
 import Toolbar from '@features/ui/toolbar';
-
-import { createTable } from '@features/lib/tableFactory';
-import { formatCellAddress } from '@features/lib/cellAddress';
-import {
-  detectCellType,
-  evaluateFormula,
-  getNumericCellValue,
-  normalizeCellValue,
-} from '@features/lib/utils';
-
-import type { CellData } from '@features/spreadsheet/spreadsheetType';
-
-interface SpreadsheetGridProps {
-  rows?: number;
-  columns?: number;
-  initialData?: CellData[][];
-  onDataChange?: (data: CellData[][]) => void;
-}
 
 interface ContextMenuState {
   x: number;
@@ -37,49 +22,6 @@ interface ResizeState {
   startSize: number;
 }
 
-function createEmptyCell(rowIndex: number, columnIndex: number): CellData {
-  const address = formatCellAddress(rowIndex, columnIndex);
-
-  return {
-    id: address,
-    address,
-    rawValue: '',
-    computedValue: '',
-    type: 'string',
-  };
-}
-
-function normalizeTableAddresses(data: CellData[][]): CellData[][] {
-  return data.map((row, rowIndex) =>
-    row.map((cell, columnIndex) => {
-      const address = formatCellAddress(rowIndex, columnIndex);
-
-      return {
-        ...cell,
-        id: address,
-        address,
-      };
-    }),
-  );
-}
-
-function recalculateTable(data: CellData[][]): CellData[][] {
-  return data.map((row) =>
-    row.map((cell) => {
-      if (!cell.rawValue.startsWith('=')) {
-        return cell;
-      }
-
-      return {
-        ...cell,
-        computedValue: evaluateFormula(cell.rawValue, (address) =>
-          getNumericCellValue(address, data),
-        ),
-      };
-    }),
-  );
-}
-
 function getColumnTitle(columnIndex: number): string {
   let result = '';
   let index = columnIndex;
@@ -92,53 +34,25 @@ function getColumnTitle(columnIndex: number): string {
   return result;
 }
 
-const SpreadsheetGrid = ({
-  rows = 100,
-  columns = 26,
-  initialData,
-  onDataChange,
-}: SpreadsheetGridProps) => {
-  const initialRowCount = initialData?.length ?? rows;
-  const initialColumnCount = initialData?.[0]?.length ?? columns;
+const SpreadsheetGrid = () => {
+  const dispatch = useAppDispatch();
 
-  const [data, setData] = useState<CellData[][]>(() =>
-    initialData ?? createTable({ rows, columns }),
+  const data = useAppSelector((state) => state.spreadsheet.cells);
+  const columnWidths = useAppSelector((state) => state.spreadsheet.columnWidths);
+  const rowHeights = useAppSelector((state) => state.spreadsheet.rowHeights);
+  const activeCell = useAppSelector((state) => state.spreadsheet.activeCell);
+  const editingCell = useAppSelector((state) => state.spreadsheet.editingCell);
+  const selectedRange = useAppSelector(
+    (state) => state.spreadsheet.selectedRange,
   );
 
-  const [columnWidths, setColumnWidths] = useState<number[]>(() =>
-    Array.from({ length: initialColumnCount }, () => 80),
-  );
-
-  const [rowHeights, setRowHeights] = useState<number[]>(() =>
-    Array.from({ length: initialRowCount }, () => 24),
-  );
-
-  const [activeCell, setActiveCell] = useState<[number, number] | null>(null);
-  const [editingCell, setEditingCell] = useState<[number, number] | null>(null);
   const [toolbar, setToolbar] = useState<ContextMenuState | null>(null);
-
-  const [selectedRange, setSelectedRange] = useState<{
-    start: [number, number];
-    end: [number, number];
-  } | null>(null);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<ResizeState | null>(null);
 
   const rowCount = data.length;
   const columnCount = data[0]?.length ?? 0;
-
-  const updateData = useCallback(
-    (updater: (prevData: CellData[][]) => CellData[][]) => {
-      setData((prevData) => {
-        const nextData = updater(prevData);
-        onDataChange?.(nextData);
-
-        return nextData;
-      });
-    },
-    [onDataChange],
-  );
 
   const totalTableWidth = useMemo(
     () => 40 + columnWidths.reduce((sum, width) => sum + width, 0),
@@ -152,32 +66,29 @@ const SpreadsheetGrid = ({
     overscan: 10,
   });
 
-  const clearSelection = useCallback(() => {
-    setActiveCell(null);
-    setEditingCell(null);
-    setSelectedRange(null);
-  }, []);
-
   const handleCellClick = useCallback(
     (rowIndex: number, columnIndex: number, shiftKey = false) => {
       setToolbar(null);
 
       if (shiftKey && activeCell) {
-        setSelectedRange({
-          start: activeCell,
-          end: [rowIndex, columnIndex],
-        });
+        dispatch(
+          spreadsheetActions.setSelectedRange({
+            start: activeCell,
+            end: [rowIndex, columnIndex],
+          }),
+        );
 
         gridRef.current?.focus();
         return;
       }
 
-      setActiveCell([rowIndex, columnIndex]);
-      setEditingCell(null);
-      setSelectedRange(null);
+      dispatch(spreadsheetActions.setActiveCell([rowIndex, columnIndex]));
+      dispatch(spreadsheetActions.stopEditing());
+      dispatch(spreadsheetActions.setSelectedRange(null));
+
       gridRef.current?.focus();
     },
-    [activeCell],
+    [activeCell, dispatch],
   );
 
   const handleCellToolbar = useCallback(
@@ -188,9 +99,9 @@ const SpreadsheetGrid = ({
     ) => {
       event.preventDefault();
 
-      setActiveCell([rowIndex, columnIndex]);
-      setEditingCell(null);
-      setSelectedRange(null);
+      dispatch(spreadsheetActions.setActiveCell([rowIndex, columnIndex]));
+      dispatch(spreadsheetActions.stopEditing());
+      dispatch(spreadsheetActions.setSelectedRange(null));
 
       setToolbar({
         x: event.clientX,
@@ -200,179 +111,45 @@ const SpreadsheetGrid = ({
 
       gridRef.current?.focus();
     },
-    [],
+    [dispatch],
   );
 
   const handleStartEditing = useCallback(
     (rowIndex: number, columnIndex: number) => {
       setToolbar(null);
-      setActiveCell([rowIndex, columnIndex]);
-      setEditingCell([rowIndex, columnIndex]);
+      dispatch(spreadsheetActions.startEditing([rowIndex, columnIndex]));
     },
-    [],
+    [dispatch],
   );
 
   const handleCellChange = useCallback(
     (rowIndex: number, columnIndex: number, newValue: string) => {
-      updateData((prevData) => {
-        const updatedData: CellData[][] = prevData.map((row, currentRowIndex) =>
-          row.map((cell, currentColumnIndex) => {
-            if (
-              currentRowIndex === rowIndex &&
-              currentColumnIndex === columnIndex
-            ) {
-              const cellType = detectCellType(newValue);
-
-              return {
-                ...cell,
-                rawValue: newValue,
-                computedValue:
-                  cellType === 'formula' ? '' : normalizeCellValue(newValue),
-                type: cellType,
-              };
-            }
-
-            return cell;
-          }),
-        );
-
-        return recalculateTable(updatedData);
-      });
-
-      setEditingCell(null);
+      dispatch(
+        spreadsheetActions.setCellValue({
+          rowIndex,
+          columnIndex,
+          value: newValue,
+        }),
+      );
     },
-    [updateData],
-  );
-
-  const addRowAfter = useCallback(
-    (rowIndex: number) => {
-      updateData((prevData) => {
-        const columnLength = prevData[0]?.length ?? columns;
-        const insertIndex = Math.min(rowIndex + 1, prevData.length);
-
-        const newRow = Array.from({ length: columnLength }, (_, columnIndex) =>
-          createEmptyCell(insertIndex, columnIndex),
-        );
-
-        const updatedData = [
-          ...prevData.slice(0, insertIndex),
-          newRow,
-          ...prevData.slice(insertIndex),
-        ];
-
-        return recalculateTable(normalizeTableAddresses(updatedData));
-      });
-
-      setRowHeights((prev) => {
-        const insertIndex = Math.min(rowIndex + 1, prev.length);
-
-        return [...prev.slice(0, insertIndex), 24, ...prev.slice(insertIndex)];
-      });
-
-      clearSelection();
-    },
-    [columns, clearSelection, updateData],
-  );
-
-  const deleteRowAt = useCallback(
-    (rowIndex: number) => {
-      updateData((prevData) => {
-        if (prevData.length <= 1) {
-          return prevData;
-        }
-
-        const updatedData = prevData.filter((_, index) => index !== rowIndex);
-
-        return recalculateTable(normalizeTableAddresses(updatedData));
-      });
-
-      setRowHeights((prev) => {
-        if (prev.length <= 1) {
-          return prev;
-        }
-
-        return prev.filter((_, index) => index !== rowIndex);
-      });
-
-      clearSelection();
-    },
-    [clearSelection, updateData],
-  );
-
-  const addColumnAfter = useCallback(
-    (columnIndex: number) => {
-      updateData((prevData) => {
-        const currentColumnCount = prevData[0]?.length ?? 0;
-        const insertIndex = Math.min(columnIndex + 1, currentColumnCount);
-
-        const updatedData = prevData.map((row, rowIndex) => {
-          const newCell = createEmptyCell(rowIndex, insertIndex);
-
-          return [
-            ...row.slice(0, insertIndex),
-            newCell,
-            ...row.slice(insertIndex),
-          ];
-        });
-
-        return recalculateTable(normalizeTableAddresses(updatedData));
-      });
-
-      setColumnWidths((prev) => {
-        const insertIndex = Math.min(columnIndex + 1, prev.length);
-
-        return [...prev.slice(0, insertIndex), 80, ...prev.slice(insertIndex)];
-      });
-
-      clearSelection();
-    },
-    [clearSelection, updateData],
-  );
-
-  const deleteColumnAt = useCallback(
-    (columnIndex: number) => {
-      updateData((prevData) => {
-        const currentColumnCount = prevData[0]?.length ?? 0;
-
-        if (currentColumnCount <= 1) {
-          return prevData;
-        }
-
-        const updatedData = prevData.map((row) =>
-          row.filter((_, index) => index !== columnIndex),
-        );
-
-        return recalculateTable(normalizeTableAddresses(updatedData));
-      });
-
-      setColumnWidths((prev) => {
-        if (prev.length <= 1) {
-          return prev;
-        }
-
-        return prev.filter((_, index) => index !== columnIndex);
-      });
-
-      clearSelection();
-    },
-    [clearSelection, updateData],
+    [dispatch],
   );
 
   const addRow = useCallback(() => {
-    addRowAfter(rowCount - 1);
-  }, [addRowAfter, rowCount]);
+    dispatch(spreadsheetActions.addRowAfter(rowCount - 1));
+  }, [dispatch, rowCount]);
 
   const deleteRow = useCallback(() => {
-    deleteRowAt(rowCount - 1);
-  }, [deleteRowAt, rowCount]);
+    dispatch(spreadsheetActions.deleteRowAt(rowCount - 1));
+  }, [dispatch, rowCount]);
 
   const addColumn = useCallback(() => {
-    addColumnAfter(columnCount - 1);
-  }, [addColumnAfter, columnCount]);
+    dispatch(spreadsheetActions.addColumnAfter(columnCount - 1));
+  }, [dispatch, columnCount]);
 
   const deleteColumn = useCallback(() => {
-    deleteColumnAt(columnCount - 1);
-  }, [deleteColumnAt, columnCount]);
+    dispatch(spreadsheetActions.deleteColumnAt(columnCount - 1));
+  }, [dispatch, columnCount]);
 
   const handleToolbarAction = useCallback(
     (action: string) => {
@@ -384,19 +161,19 @@ const SpreadsheetGrid = ({
 
       switch (action) {
         case 'add-row':
-          addRowAfter(rowIndex);
+          dispatch(spreadsheetActions.addRowAfter(rowIndex));
           break;
 
         case 'delete-row':
-          deleteRowAt(rowIndex);
+          dispatch(spreadsheetActions.deleteRowAt(rowIndex));
           break;
 
         case 'add-column':
-          addColumnAfter(columnIndex);
+          dispatch(spreadsheetActions.addColumnAfter(columnIndex));
           break;
 
         case 'delete-column':
-          deleteColumnAt(columnIndex);
+          dispatch(spreadsheetActions.deleteColumnAt(columnIndex));
           break;
 
         default:
@@ -405,7 +182,7 @@ const SpreadsheetGrid = ({
 
       setToolbar(null);
     },
-    [toolbar, addRowAfter, deleteRowAt, addColumnAfter, deleteColumnAt],
+    [dispatch, toolbar],
   );
 
   const handleColumnResizeStart = useCallback(
@@ -468,9 +245,19 @@ const SpreadsheetGrid = ({
       if (event.key === 'Escape') {
         event.preventDefault();
         setToolbar(null);
-        setEditingCell(null);
-        setSelectedRange(null);
-        setActiveCell(null);
+        dispatch(spreadsheetActions.clearSelection());
+        return;
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        dispatch(spreadsheetActions.undo());
+        return;
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        dispatch(spreadsheetActions.redo());
         return;
       }
 
@@ -502,7 +289,7 @@ const SpreadsheetGrid = ({
 
         case 'Enter':
           event.preventDefault();
-          handleStartEditing(rowIndex, columnIndex);
+          dispatch(spreadsheetActions.startEditing([rowIndex, columnIndex]));
           return;
 
         default:
@@ -510,7 +297,9 @@ const SpreadsheetGrid = ({
       }
 
       event.preventDefault();
-      setActiveCell([nextRowIndex, nextColumnIndex]);
+      dispatch(
+        spreadsheetActions.setActiveCell([nextRowIndex, nextColumnIndex]),
+      );
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -523,7 +312,7 @@ const SpreadsheetGrid = ({
     editingCell,
     rowCount,
     columnCount,
-    handleStartEditing,
+    dispatch,
   ]);
 
   useEffect(() => {
@@ -538,10 +327,11 @@ const SpreadsheetGrid = ({
         const diff = event.clientX - resize.startPosition;
         const nextWidth = Math.max(40, resize.startSize + diff);
 
-        setColumnWidths((prev) =>
-          prev.map((width, index) =>
-            index === resize.index ? nextWidth : width,
-          ),
+        dispatch(
+          spreadsheetActions.resizeColumn({
+            columnIndex: resize.index,
+            width: nextWidth,
+          }),
         );
 
         return;
@@ -550,10 +340,11 @@ const SpreadsheetGrid = ({
       const diff = event.clientY - resize.startPosition;
       const nextHeight = Math.max(20, resize.startSize + diff);
 
-      setRowHeights((prev) =>
-        prev.map((height, index) =>
-          index === resize.index ? nextHeight : height,
-        ),
+      dispatch(
+        spreadsheetActions.resizeRow({
+          rowIndex: resize.index,
+          height: nextHeight,
+        }),
       );
     };
 
@@ -568,7 +359,7 @@ const SpreadsheetGrid = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
     if (!editingCell) {
@@ -594,7 +385,14 @@ const SpreadsheetGrid = ({
     }
 
     const [rowIndex, columnIndex] = activeCell;
-    handleCellChange(rowIndex, columnIndex, newValue);
+
+    dispatch(
+      spreadsheetActions.setCellValue({
+        rowIndex,
+        columnIndex,
+        value: newValue,
+      }),
+    );
   };
 
   const isCellInSelectedRange = (
@@ -641,6 +439,20 @@ const SpreadsheetGrid = ({
 
         <button type="button" onClick={deleteColumn}>
           Удалить столбец
+        </button>
+
+        <button
+          type="button"
+          onClick={() => dispatch(spreadsheetActions.undo())}
+        >
+          Undo
+        </button>
+
+        <button
+          type="button"
+          onClick={() => dispatch(spreadsheetActions.redo())}
+        >
+          Redo
         </button>
       </div>
 

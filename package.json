@@ -20,10 +20,12 @@
     "preview:lab8_weather_app": "vite preview --config lab8_weather_app/vite.config.ts"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.11.2",
     "@tanstack/react-virtual": "^3.13.24",
     "axios": "^1.14.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-redux": "^9.2.0",
     "react-router-dom": "^7.15.0"
   },
   "devDependencies": {
