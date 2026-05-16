@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useAppDispatch, useAppSelector } from '@app/hooks';
 import { loadDocumentById } from '@features/documents/documentSlice';
@@ -19,7 +19,7 @@ const SpreadsheetPage = () => {
 
   useEffect(() => {
     if (!documentId) {
-      navigate('/documents');
+      navigate('/dashboard');
       return;
     }
 
@@ -35,25 +35,26 @@ const SpreadsheetPage = () => {
         );
       })
       .catch(() => {
-        navigate('/documents');
+        navigate('/404');
       });
   }, [dispatch, documentId, navigate]);
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!event.ctrlKey || event.key.toLowerCase() !== 's') {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (saveStatus === 'saved') {
         return;
       }
-
+  
       event.preventDefault();
+      event.returnValue = '';
     };
-
-    window.document.addEventListener('keydown', handleKeyDown);
-
+  
+    window.addEventListener('beforeunload', handleBeforeUnload);
+  
     return () => {
-      window.document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, []);
+  }, [saveStatus]);
 
   if (!spreadsheetDocument) {
     return <p style={{ padding: 24 }}>Загрузка...</p>;
@@ -68,12 +69,25 @@ const SpreadsheetPage = () => {
 
   return (
     <main style={{ padding: 24 }}>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <button type="button" onClick={() => navigate('/documents')}>
+      <div style={{ marginBottom: 12 }}>
+        <Link to="/dashboard">Мои документы</Link>
+        <span> → </span>
+        <span>{spreadsheetDocument.title}</span>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          alignItems: 'center',
+          marginBottom: 12,
+        }}
+      >
+        <button type="button" onClick={() => navigate('/dashboard')}>
           Назад
         </button>
 
-        <h1>{spreadsheetDocument.title}</h1>
+        <h1 style={{ margin: 0 }}>{spreadsheetDocument.title}</h1>
 
         <span>{statusText}</span>
       </div>
