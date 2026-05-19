@@ -28,27 +28,25 @@ function saveDocuments(documents: SpreadsheetDocument[]): void {
 
 export const documentsApi = {
   getAll(): SpreadsheetDocument[] {
-    const user = authApi.getCurrentUser();
-
-    if (!user) {
-      return [];
-    }
-
+    const user = authApi.ensureAuthorized();
+  
     return getStoredDocuments().filter((document) => document.userId === user.id);
   },
 
   getById(id: string): SpreadsheetDocument | null {
-    const user = authApi.getCurrentUser();
-
-    if (!user) {
+    const user = authApi.ensureAuthorized();
+  
+    const document = getStoredDocuments().find((item) => item.id === id);
+  
+    if (!document) {
       return null;
     }
-
-    const document = getStoredDocuments().find(
-      (item) => item.id === id && item.userId === user.id,
-    );
-
-    return document ?? null;
+  
+    if (document.userId !== user.id) {
+      throw new Error('403');
+    }
+  
+    return document;
   },
 
   create(payload: CreateDocumentPayload): SpreadsheetDocument {

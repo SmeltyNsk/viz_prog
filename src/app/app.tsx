@@ -8,6 +8,7 @@ import LoginPage from '@pages/login/loginPage';
 import NotFoundPage from '@pages/notFound/notFoundPage';
 import ProfilePage from '@pages/profile/profilePage';
 import SpreadsheetPage from '@pages/spreadsheetPage/spreadsheetPage';
+import RegisterPage from '@pages/register/registerPage';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
 
         <Route element={<AppLayout />}>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
           <Route
             path="/dashboard"

@@ -18,7 +18,7 @@ const ProfilePage = () => {
     <main style={{ padding: 24 }}>
       <h1>Профиль</h1>
 
-      <p>Пользователь: {user?.login ?? 'Неизвестно'}</p>
+      <p>Пользователь: {user?.email ?? 'Неизвестно'}</p>
 
       <button type="button" onClick={handleLogout}>
         Выйти

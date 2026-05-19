@@ -1,23 +1,42 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-import { authApi } from '@features/auth/api/authApi';
+import { useAppDispatch, useAppSelector } from '@app/hooks';
+import { loginUser } from '@features/auth/authSlice';
+
+interface LocationState {
+  from?: string;
+}
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const dispatch = useAppDispatch();
 
-  const [login, setLogin] = useState('student');
-  const [password, setPassword] = useState('123');
+  const authStatus = useAppSelector((state) => state.auth.status);
+  const authError = useAppSelector((state) => state.auth.error);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const [email, setEmail] = useState('student@test.ru');
+  const [password, setPassword] = useState('12345678');
+
+  const state = location.state as LocationState | null;
+  const redirectPath = state?.from ?? '/dashboard';
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    authApi.login({
-      login,
-      password,
-    });
+    const result = await dispatch(
+      loginUser({
+        email,
+        password,
+      }),
+    );
 
-    navigate('/documents');
+    if (loginUser.fulfilled.match(result)) {
+      navigate(redirectPath, {
+        replace: true,
+      });
+    }
   };
 
   return (
@@ -27,16 +46,16 @@ const LoginPage = () => {
       <form
         onSubmit={handleSubmit}
         style={{
-          display: 'flex',
-          flexDirection: 'column',
+          display: 'grid',
           gap: 12,
-          maxWidth: 320,
+          maxWidth: 360,
         }}
       >
         <input
-          value={login}
-          onChange={(event) => setLogin(event.target.value)}
-          placeholder="Логин"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="Email"
+          type="email"
         />
 
         <input
@@ -46,7 +65,13 @@ const LoginPage = () => {
           type="password"
         />
 
-        <button type="submit">Войти</button>
+        {authError && <p style={{ color: 'red' }}>{authError}</p>}
+
+        <button type="submit" disabled={authStatus === 'loading'}>
+          {authStatus === 'loading' ? 'Вход...' : 'Войти'}
+        </button>
+
+        <Link to="/register">Создать аккаунт</Link>
       </form>
     </main>
   );

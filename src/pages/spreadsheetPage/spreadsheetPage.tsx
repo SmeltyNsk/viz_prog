@@ -35,7 +35,7 @@ const SpreadsheetPage = () => {
         );
       })
       .catch(() => {
-        navigate('/404');
+        navigate('/dashboard');
       });
   }, [dispatch, documentId, navigate]);
 
