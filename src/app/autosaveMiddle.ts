@@ -30,6 +30,10 @@ function shouldAutosave(actionType: string): boolean {
     'spreadsheet/deleteColumnAt',
     'spreadsheet/undo',
     'spreadsheet/redo',
+    'spreadsheet/updateSelectedCellsFormat',
+    'spreadsheet/clearSelectedCells',
+    'spreadsheet/cutSelection',
+    'spreadsheet/pasteClipboard',
   ].includes(actionType);
 }
 

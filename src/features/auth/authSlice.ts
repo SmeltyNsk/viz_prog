@@ -1,7 +1,13 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 
 import { authApi } from '@features/auth/api/authApi';
-import type { LoginPayload, RegisterPayload, User } from './authTypes';
+import type {
+  ChangePasswordPayload,
+  LoginPayload,
+  RegisterPayload,
+  UpdateProfilePayload,
+  User,
+} from './authTypes';
 
 interface AuthState {
   user: User | null;
@@ -30,6 +36,18 @@ export const refreshUserSession = createAsyncThunk(
   async () => authApi.refreshSession(),
 );
 
+export const updateProfile = createAsyncThunk(
+  'auth/updateProfile',
+  async (payload: UpdateProfilePayload) => authApi.updateProfile(payload),
+);
+
+export const changePassword = createAsyncThunk(
+  'auth/changePassword',
+  async (payload: ChangePasswordPayload) => {
+    authApi.changePassword(payload);
+  },
+);
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -50,6 +68,7 @@ const authSlice = createSlice({
       .addCase(loginUser.fulfilled, (state, action) => {
         state.status = 'idle';
         state.user = action.payload.user;
+        state.error = null;
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.status = 'error';
@@ -62,6 +81,7 @@ const authSlice = createSlice({
       .addCase(registerUser.fulfilled, (state, action) => {
         state.status = 'idle';
         state.user = action.payload.user;
+        state.error = null;
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.status = 'error';
@@ -69,6 +89,31 @@ const authSlice = createSlice({
       })
       .addCase(refreshUserSession.fulfilled, (state, action) => {
         state.user = action.payload?.user ?? null;
+      })
+      .addCase(updateProfile.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.status = 'idle';
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
+        state.status = 'error';
+        state.error = action.error.message ?? 'Ошибка обновления профиля';
+      })
+      .addCase(changePassword.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(changePassword.fulfilled, (state) => {
+        state.status = 'idle';
+        state.error = null;
+      })
+      .addCase(changePassword.rejected, (state, action) => {
+        state.status = 'error';
+        state.error = action.error.message ?? 'Ошибка смены пароля';
       });
   },
 });

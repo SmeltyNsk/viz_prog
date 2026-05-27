@@ -2,9 +2,9 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { createTable } from '@features/lib/tableFactory';
 import { formatCellAddress } from '@features/lib/cellAddress';
-import { detectCellType, evaluateFormula, getNumericCellValue, normalizeCellValue, } from '@features/lib/utils';
+import { detectCellType, evaluateFormula, getNumericCellValue, normalizeCellValue,} from '@features/lib/utils';
 
-import type { CellData } from '@features/spreadsheet/spreadsheetType';
+import { defaultCellFormat, type CellData, type CellFormat, } from '@features/spreadsheet/spreadsheetType';
 
 type CellPosition = [number, number];
 
@@ -25,11 +25,22 @@ export interface SpreadsheetState {
   activeCell: CellPosition | null;
   editingCell: CellPosition | null;
   selectedRange: SelectedRange | null;
+  clipboard: CellData[][] | null;
   history: HistoryState;
 }
 
+function cloneCell(cell: CellData): CellData {
+  return {
+    ...cell,
+    format: {
+      ...defaultCellFormat,
+      ...cell.format,
+    },
+  };
+}
+
 function cloneTable(cells: CellData[][]): CellData[][] {
-  return cells.map((row) => row.map((cell) => ({ ...cell })));
+  return cells.map((row) => row.map(cloneCell));
 }
 
 function createEmptyCell(rowIndex: number, columnIndex: number): CellData {
@@ -41,6 +52,7 @@ function createEmptyCell(rowIndex: number, columnIndex: number): CellData {
     rawValue: '',
     computedValue: '',
     type: 'string',
+    format: defaultCellFormat,
   };
 }
 
@@ -53,6 +65,10 @@ function normalizeTableAddresses(cells: CellData[][]): CellData[][] {
         ...cell,
         id: address,
         address,
+        format: {
+          ...defaultCellFormat,
+          ...cell.format,
+        },
       };
     }),
   );
@@ -84,6 +100,49 @@ function remember(state: SpreadsheetState): void {
   }
 }
 
+function getRangeBounds(
+  start: CellPosition,
+  end: CellPosition,
+): {
+  startRow: number;
+  endRow: number;
+  startColumn: number;
+  endColumn: number;
+} {
+  return {
+    startRow: Math.min(start[0], end[0]),
+    endRow: Math.max(start[0], end[0]),
+    startColumn: Math.min(start[1], end[1]),
+    endColumn: Math.max(start[1], end[1]),
+  };
+}
+
+function getCurrentSelectionBounds(state: SpreadsheetState):
+  | {
+      startRow: number;
+      endRow: number;
+      startColumn: number;
+      endColumn: number;
+    }
+  | null {
+  if (state.selectedRange) {
+    return getRangeBounds(state.selectedRange.start, state.selectedRange.end);
+  }
+
+  if (state.activeCell) {
+    const [rowIndex, columnIndex] = state.activeCell;
+
+    return {
+      startRow: rowIndex,
+      endRow: rowIndex,
+      startColumn: columnIndex,
+      endColumn: columnIndex,
+    };
+  }
+
+  return null;
+}
+
 const initialRows = 100;
 const initialColumns = 26;
 
@@ -97,6 +156,7 @@ const initialState: SpreadsheetState = {
   activeCell: null,
   editingCell: null,
   selectedRange: null,
+  clipboard: null,
   history: {
     past: [],
     future: [],
@@ -124,6 +184,7 @@ const spreadsheetSlice = createSlice({
       state.activeCell = null;
       state.editingCell = null;
       state.selectedRange = null;
+      state.clipboard = null;
       state.history = {
         past: [],
         future: [],
@@ -176,9 +237,187 @@ const spreadsheetSlice = createSlice({
       cell.computedValue =
         cellType === 'formula' ? '' : normalizeCellValue(value);
       cell.type = cellType;
+      cell.format = {
+        ...defaultCellFormat,
+        ...cell.format,
+      };
 
       state.cells = recalculateTable(state.cells);
       state.editingCell = null;
+    },
+
+    updateSelectedCellsFormat(
+      state,
+      action: PayloadAction<Partial<CellFormat>>,
+    ) {
+      const bounds = getCurrentSelectionBounds(state);
+
+      if (!bounds) {
+        return;
+      }
+
+      remember(state);
+
+      for (
+        let rowIndex = bounds.startRow;
+        rowIndex <= bounds.endRow;
+        rowIndex += 1
+      ) {
+        for (
+          let columnIndex = bounds.startColumn;
+          columnIndex <= bounds.endColumn;
+          columnIndex += 1
+        ) {
+          const cell = state.cells[rowIndex]?.[columnIndex];
+
+          if (cell) {
+            cell.format = {
+              ...defaultCellFormat,
+              ...cell.format,
+              ...action.payload,
+            };
+          }
+        }
+      }
+    },
+
+    clearSelectedCells(state) {
+      const bounds = getCurrentSelectionBounds(state);
+
+      if (!bounds) {
+        return;
+      }
+
+      remember(state);
+
+      for (
+        let rowIndex = bounds.startRow;
+        rowIndex <= bounds.endRow;
+        rowIndex += 1
+      ) {
+        for (
+          let columnIndex = bounds.startColumn;
+          columnIndex <= bounds.endColumn;
+          columnIndex += 1
+        ) {
+          const cell = state.cells[rowIndex]?.[columnIndex];
+
+          if (cell) {
+            cell.rawValue = '';
+            cell.computedValue = '';
+            cell.type = 'string';
+          }
+        }
+      }
+
+      state.cells = recalculateTable(state.cells);
+    },
+
+    copySelection(state) {
+      const bounds = getCurrentSelectionBounds(state);
+
+      if (!bounds) {
+        return;
+      }
+
+      const copiedCells: CellData[][] = [];
+
+      for (
+        let rowIndex = bounds.startRow;
+        rowIndex <= bounds.endRow;
+        rowIndex += 1
+      ) {
+        const row: CellData[] = [];
+
+        for (
+          let columnIndex = bounds.startColumn;
+          columnIndex <= bounds.endColumn;
+          columnIndex += 1
+        ) {
+          const cell = state.cells[rowIndex]?.[columnIndex];
+
+          if (cell) {
+            row.push(cloneCell(cell));
+          }
+        }
+
+        copiedCells.push(row);
+      }
+
+      state.clipboard = copiedCells;
+    },
+
+    cutSelection(state) {
+      const bounds = getCurrentSelectionBounds(state);
+
+      if (!bounds) {
+        return;
+      }
+
+      const copiedCells: CellData[][] = [];
+
+      remember(state);
+
+      for (
+        let rowIndex = bounds.startRow;
+        rowIndex <= bounds.endRow;
+        rowIndex += 1
+      ) {
+        const row: CellData[] = [];
+
+        for (
+          let columnIndex = bounds.startColumn;
+          columnIndex <= bounds.endColumn;
+          columnIndex += 1
+        ) {
+          const cell = state.cells[rowIndex]?.[columnIndex];
+
+          if (cell) {
+            row.push(cloneCell(cell));
+
+            cell.rawValue = '';
+            cell.computedValue = '';
+            cell.type = 'string';
+          }
+        }
+
+        copiedCells.push(row);
+      }
+
+      state.clipboard = copiedCells;
+      state.cells = recalculateTable(state.cells);
+    },
+
+    pasteClipboard(state) {
+      if (!state.clipboard || !state.activeCell) {
+        return;
+      }
+
+      remember(state);
+
+      const [startRow, startColumn] = state.activeCell;
+
+      state.clipboard.forEach((row, rowOffset) => {
+        row.forEach((copiedCell, columnOffset) => {
+          const targetRow = startRow + rowOffset;
+          const targetColumn = startColumn + columnOffset;
+          const targetCell = state.cells[targetRow]?.[targetColumn];
+
+          if (!targetCell) {
+            return;
+          }
+
+          targetCell.rawValue = copiedCell.rawValue;
+          targetCell.computedValue = copiedCell.computedValue;
+          targetCell.type = copiedCell.type;
+          targetCell.format = {
+            ...defaultCellFormat,
+            ...copiedCell.format,
+          };
+        });
+      });
+
+      state.cells = recalculateTable(state.cells);
     },
 
     addRowAfter(state, action: PayloadAction<number>) {

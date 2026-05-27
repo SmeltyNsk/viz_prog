@@ -7,7 +7,13 @@ import { spreadsheetActions } from '@features/spreadsheet/spreadsheetSlice';
 
 import Cell from '@features/ui/cell';
 import FormulaBar from '@features/ui/formulaBar';
+import FormattingToolbar from '@features/ui/formattingToolbar';
 import Toolbar from '@features/ui/toolbar';
+
+import {
+  defaultCellFormat,
+  type CellFormat,
+} from '@features/spreadsheet/spreadsheetType';
 
 interface ContextMenuState {
   x: number;
@@ -34,6 +40,46 @@ function getColumnTitle(columnIndex: number): string {
   return result;
 }
 
+function formatDisplayedValue(value: unknown, format: CellFormat): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (format.numberFormat === 'percent') {
+    const numberValue = Number(value);
+
+    if (!Number.isNaN(numberValue)) {
+      return `${numberValue}%`;
+    }
+  }
+
+  if (format.numberFormat === 'currency') {
+    const numberValue = Number(value);
+
+    if (!Number.isNaN(numberValue)) {
+      return `${numberValue.toFixed(2)} ₽`;
+    }
+  }
+
+  if (format.numberFormat === 'number') {
+    const numberValue = Number(value);
+
+    if (!Number.isNaN(numberValue)) {
+      return String(numberValue);
+    }
+  }
+
+  if (format.numberFormat === 'date') {
+    const date = new Date(String(value));
+
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString();
+    }
+  }
+
+  return String(value);
+}
+
 const SpreadsheetGrid = () => {
   const dispatch = useAppDispatch();
 
@@ -54,6 +100,13 @@ const SpreadsheetGrid = () => {
   const rowCount = data.length;
   const columnCount = data[0]?.length ?? 0;
 
+  const activeCellData =
+    activeCell === null ? null : data[activeCell[0]]?.[activeCell[1]] ?? null;
+
+  const activeCellAddress = activeCellData?.address ?? null;
+  const activeCellValue = activeCellData?.rawValue ?? '';
+  const currentFormat = activeCellData?.format ?? null;
+
   const totalTableWidth = useMemo(
     () => 40 + columnWidths.reduce((sum, width) => sum + width, 0),
     [columnWidths],
@@ -65,6 +118,13 @@ const SpreadsheetGrid = () => {
     estimateSize: (index) => rowHeights[index] ?? 24,
     overscan: 10,
   });
+
+  const handleFormatChange = useCallback(
+    (format: Partial<CellFormat>) => {
+      dispatch(spreadsheetActions.updateSelectedCellsFormat(format));
+    },
+    [dispatch],
+  );
 
   const handleCellClick = useCallback(
     (rowIndex: number, columnIndex: number, shiftKey = false) => {
@@ -134,6 +194,10 @@ const SpreadsheetGrid = () => {
     },
     [dispatch],
   );
+
+  const handleCancelEditing = useCallback(() => {
+    dispatch(spreadsheetActions.stopEditing());
+  }, [dispatch]);
 
   const addRow = useCallback(() => {
     dispatch(spreadsheetActions.addRowAfter(rowCount - 1));
@@ -251,13 +315,73 @@ const SpreadsheetGrid = () => {
 
       if (event.ctrlKey && event.key.toLowerCase() === 'z') {
         event.preventDefault();
-        dispatch(spreadsheetActions.undo());
+
+        if (event.shiftKey) {
+          dispatch(spreadsheetActions.redo());
+        } else {
+          dispatch(spreadsheetActions.undo());
+        }
+
         return;
       }
 
       if (event.ctrlKey && event.key.toLowerCase() === 'y') {
         event.preventDefault();
         dispatch(spreadsheetActions.redo());
+        return;
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        dispatch(
+          spreadsheetActions.updateSelectedCellsFormat({
+            bold: !(currentFormat?.bold ?? false),
+          }),
+        );
+        return;
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === 'i') {
+        event.preventDefault();
+        dispatch(
+          spreadsheetActions.updateSelectedCellsFormat({
+            italic: !(currentFormat?.italic ?? false),
+          }),
+        );
+        return;
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === 'u') {
+        event.preventDefault();
+        dispatch(
+          spreadsheetActions.updateSelectedCellsFormat({
+            underline: !(currentFormat?.underline ?? false),
+          }),
+        );
+        return;
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === 'c') {
+        event.preventDefault();
+        dispatch(spreadsheetActions.copySelection());
+        return;
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === 'x') {
+        event.preventDefault();
+        dispatch(spreadsheetActions.cutSelection());
+        return;
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === 'v') {
+        event.preventDefault();
+        dispatch(spreadsheetActions.pasteClipboard());
+        return;
+      }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        dispatch(spreadsheetActions.clearSelectedCells());
         return;
       }
 
@@ -287,6 +411,12 @@ const SpreadsheetGrid = () => {
           nextColumnIndex = Math.min(columnCount - 1, columnIndex + 1);
           break;
 
+        case 'Tab':
+          nextColumnIndex = event.shiftKey
+            ? Math.max(0, columnIndex - 1)
+            : Math.min(columnCount - 1, columnIndex + 1);
+          break;
+
         case 'Enter':
           event.preventDefault();
           dispatch(spreadsheetActions.startEditing([rowIndex, columnIndex]));
@@ -309,10 +439,11 @@ const SpreadsheetGrid = () => {
     };
   }, [
     activeCell,
+    columnCount,
+    currentFormat,
+    dispatch,
     editingCell,
     rowCount,
-    columnCount,
-    dispatch,
   ]);
 
   useEffect(() => {
@@ -373,12 +504,6 @@ const SpreadsheetGrid = () => {
     rowVirtualizer.measure();
   }, [rowHeights, rowVirtualizer]);
 
-  const activeCellData =
-    activeCell === null ? null : data[activeCell[0]]?.[activeCell[1]] ?? null;
-
-  const activeCellAddress = activeCellData?.address ?? null;
-  const activeCellValue = activeCellData?.rawValue ?? '';
-
   const handleFormulaBarChange = (newValue: string) => {
     if (!activeCell) {
       return;
@@ -417,14 +542,19 @@ const SpreadsheetGrid = () => {
   };
 
   return (
-    <div style={{ display: 'inline-block' }}>
+    <div style={{ display: 'inline-block', maxWidth: '100%' }}>
       <FormulaBar
         activeCellAddress={activeCellAddress}
         activeCellValue={activeCellValue}
         onChange={handleFormulaBarChange}
       />
 
-      <div style={{ display: 'flex', gap: 8, padding: '6px 0' }}>
+      <FormattingToolbar
+        currentFormat={currentFormat}
+        onChange={handleFormatChange}
+      />
+
+      <div style={{ display: 'flex', gap: 8, padding: '6px 0', flexWrap: 'wrap' }}>
         <button type="button" onClick={addRow}>
           Добавить строку
         </button>
@@ -577,6 +707,11 @@ const SpreadsheetGrid = () => {
                   </div>
 
                   {row.map((cell, columnIndex) => {
+                    const cellFormat = {
+                      ...defaultCellFormat,
+                      ...cell.format,
+                    };
+
                     const isSelected = isCellInSelectedRange(
                       rowIndex,
                       columnIndex,
@@ -595,12 +730,17 @@ const SpreadsheetGrid = () => {
                     return (
                       <Cell
                         key={cell.address}
-                        value={String(cell.computedValue ?? '')}
+                        value={formatDisplayedValue(
+                          cell.computedValue,
+                          cellFormat,
+                        )}
+                        rawValue={cell.rawValue}
                         formula={
                           cell.rawValue.startsWith('=')
                             ? cell.rawValue
                             : undefined
                         }
+                        format={cellFormat}
                         isActive={isActive}
                         isSelected={isSelected}
                         isEditing={isEditing}
@@ -621,6 +761,7 @@ const SpreadsheetGrid = () => {
                         onStopEditing={(newValue) =>
                           handleCellChange(rowIndex, columnIndex, newValue)
                         }
+                        onCancelEditing={handleCancelEditing}
                         onContextMenu={(event) =>
                           handleCellToolbar(event, rowIndex, columnIndex)
                         }

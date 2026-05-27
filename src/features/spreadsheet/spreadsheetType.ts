@@ -1,6 +1,30 @@
 export type CellValue = string | number | boolean | null;
 
-export type CellType = 'string' | 'number' | 'formula' | 'boolean' | 'date' | 'empty';
+export type CellType = 'string' | 'number' | 'boolean' | 'formula';
+
+export type HorizontalAlign = 'left' | 'center' | 'right';
+
+export type NumberFormat = 'default' | 'number' | 'percent' | 'currency' | 'date';
+
+export interface CellFormat {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  textColor: string;
+  backgroundColor: string;
+  align: HorizontalAlign;
+  numberFormat: NumberFormat;
+}
+
+export const defaultCellFormat: CellFormat = {
+  bold: false,
+  italic: false,
+  underline: false,
+  textColor: '#000000',
+  backgroundColor: '#ffffff',
+  align: 'left',
+  numberFormat: 'default',
+};
 
 export interface CellData {
   id: string;
@@ -8,21 +32,5 @@ export interface CellData {
   rawValue: string;
   computedValue: CellValue;
   type: CellType;
-}
-
-export interface SpreadsheetData {
-  rows: number;
-  columns: number;
-  cells: CellData[][];
-}
-
-export interface CellPosition {
-    rowIndex: number;
-    columnIndex: number;
-}
-
-export interface SelectedCell {
-    address: string;
-    rowIndex: number;
-    columnIndex: number;
+  format: CellFormat;
 }

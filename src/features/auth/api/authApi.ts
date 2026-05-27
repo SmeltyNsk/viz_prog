@@ -1,9 +1,17 @@
-import type { AuthSession, AuthTokens, LoginPayload, RegisterPayload, User, } from '@features/auth/authTypes'
+import type {
+  AuthSession,
+  AuthTokens,
+  LoginPayload,
+  RegisterPayload,
+  User,
+} from '@features/auth/authTypes';
 
 interface StoredUser {
   id: string;
   email: string;
   password: string;
+  name?: string;
+  createdAt?: string;
 }
 
 const USERS_KEY = 'spreadsheet_users';
@@ -18,6 +26,14 @@ function generateId(): string {
 
 function generateToken(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function validateEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function getStoredUsers(): StoredUser[] {
@@ -38,13 +54,22 @@ function saveUsers(users: StoredUser[]): void {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
-function validateEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+function toUser(storedUser: StoredUser): User {
+  return {
+    id: storedUser.id,
+    email: storedUser.email,
+    name: storedUser.name ?? storedUser.email.split('@')[0] ?? 'Пользователь',
+    createdAt: storedUser.createdAt ?? new Date().toISOString(),
+  };
 }
 
-function createTokens(): AuthTokens {
+function createRefreshTokenForUser(email: string): string {
+  return `${generateToken('refresh')}_email_${email}`;
+}
+
+function createTokens(email: string): AuthTokens {
   const accessToken = generateToken('access');
-  const refreshToken = generateToken('refresh');
+  const refreshToken = createRefreshTokenForUser(email);
 
   accessTokenMemory = accessToken;
   accessTokenExpiresAtMemory = Date.now() + 15 * 60 * 1000;
@@ -58,7 +83,7 @@ function createTokens(): AuthTokens {
   };
 }
 
-function getUserByRefreshToken(): User | null {
+function getEmailFromRefreshToken(): string | null {
   const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
 
   if (!refreshToken) {
@@ -67,29 +92,38 @@ function getUserByRefreshToken(): User | null {
 
   const email = refreshToken.split('_email_')[1];
 
+  return email ?? null;
+}
+
+function getUserByRefreshToken(): User | null {
+  const email = getEmailFromRefreshToken();
+
   if (!email) {
     return null;
   }
 
-  const user = getStoredUsers().find((item) => item.email === email);
+  const storedUser = getStoredUsers().find((user) => user.email === email);
 
-  if (!user) {
+  if (!storedUser) {
     return null;
   }
 
-  return {
-    id: user.id,
-    email: user.email,
-  };
+  return toUser(storedUser);
 }
 
-function createRefreshTokenForUser(email: string): string {
-  return `${generateToken('refresh')}_email_${email}`;
+function ensureAuthorizedUser(): User {
+  const user = authApi.getCurrentUser();
+
+  if (!user) {
+    throw new Error('Пользователь не авторизован');
+  }
+
+  return user;
 }
 
 export const authApi = {
   register(payload: RegisterPayload): AuthSession {
-    const email = payload.email.trim().toLowerCase();
+    const email = normalizeEmail(payload.email);
 
     if (!validateEmail(email)) {
       throw new Error('Некорректный email');
@@ -104,9 +138,8 @@ export const authApi = {
     }
 
     const users = getStoredUsers();
-    const userExists = users.some((user) => user.email === email);
 
-    if (userExists) {
+    if (users.some((user) => user.email === email)) {
       throw new Error('Пользователь уже существует');
     }
 
@@ -114,52 +147,32 @@ export const authApi = {
       id: generateId(),
       email,
       password: payload.password,
+      name: email.split('@')[0] ?? 'Пользователь',
+      createdAt: new Date().toISOString(),
     };
 
     saveUsers([...users, storedUser]);
 
-    const tokens = createTokens();
-    const refreshToken = createRefreshTokenForUser(email);
-
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-
     return {
-      user: {
-        id: storedUser.id,
-        email: storedUser.email,
-      },
-      tokens: {
-        ...tokens,
-        refreshToken,
-      },
+      user: toUser(storedUser),
+      tokens: createTokens(email),
     };
   },
 
   login(payload: LoginPayload): AuthSession {
-    const email = payload.email.trim().toLowerCase();
+    const email = normalizeEmail(payload.email);
 
-    const user = getStoredUsers().find(
-      (item) => item.email === email && item.password === payload.password,
+    const storedUser = getStoredUsers().find(
+      (user) => user.email === email && user.password === payload.password,
     );
 
-    if (!user) {
+    if (!storedUser) {
       throw new Error('Неверный email или пароль');
     }
 
-    const tokens = createTokens();
-    const refreshToken = createRefreshTokenForUser(email);
-
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-
     return {
-      user: {
-        id: user.id,
-        email: user.email,
-      },
-      tokens: {
-        ...tokens,
-        refreshToken,
-      },
+      user: toUser(storedUser),
+      tokens: createTokens(email),
     };
   },
 
@@ -170,17 +183,9 @@ export const authApi = {
       return null;
     }
 
-    const tokens = createTokens();
-    const refreshToken = createRefreshTokenForUser(user.email);
-
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-
     return {
       user,
-      tokens: {
-        ...tokens,
-        refreshToken,
-      },
+      tokens: createTokens(user.email),
     };
   },
 
@@ -215,12 +220,65 @@ export const authApi = {
   },
 
   ensureAuthorized(): User {
-    const user = this.getCurrentUser();
+    return ensureAuthorizedUser();
+  },
 
-    if (!user) {
-      throw new Error('Пользователь не авторизован');
+  updateProfile(payload: { name: string }): User {
+    const currentUser = ensureAuthorizedUser();
+    const users = getStoredUsers();
+
+    const updatedUsers = users.map((user) => {
+      if (user.id !== currentUser.id) {
+        return user;
+      }
+
+      return {
+        ...user,
+        name: payload.name.trim() || user.name || currentUser.name,
+      };
+    });
+
+    saveUsers(updatedUsers);
+
+    const updatedUser = updatedUsers.find((user) => user.id === currentUser.id);
+
+    if (!updatedUser) {
+      throw new Error('Пользователь не найден');
     }
 
-    return user;
+    return toUser(updatedUser);
+  },
+
+  changePassword(payload: {
+    oldPassword: string;
+    newPassword: string;
+  }): void {
+    const currentUser = ensureAuthorizedUser();
+    const users = getStoredUsers();
+
+    const storedUser = users.find((user) => user.id === currentUser.id);
+
+    if (!storedUser) {
+      throw new Error('Пользователь не найден');
+    }
+
+    if (storedUser.password !== payload.oldPassword) {
+      throw new Error('Старый пароль введён неверно');
+    }
+
+    if (payload.newPassword.length < 8) {
+      throw new Error('Новый пароль должен быть не короче 8 символов');
+    }
+
+    const updatedUsers = users.map((user) =>
+      user.id === currentUser.id
+        ? {
+            ...user,
+            password: payload.newPassword,
+          }
+        : user,
+    );
+
+    saveUsers(updatedUsers);
   },
 };
